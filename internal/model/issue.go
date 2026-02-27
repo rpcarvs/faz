@@ -10,6 +10,8 @@ type Issue struct {
 	Type           string
 	Priority       int
 	Status         string
+	ClaimedAt      *time.Time
+	ClaimExpiresAt *time.Time
 	ParentID       *string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time

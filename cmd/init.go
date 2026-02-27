@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -37,52 +36,29 @@ var initCmd = &cobra.Command{
 			return err
 		}
 
-		initializedGit, err := ensureGitRepo(projectDir)
+		addedGitIgnore, err := ensureGitIgnoreEntry(projectDir, ".faz/")
 		if err != nil {
-			return err
-		}
-		if err := ensureGitExclude(projectDir); err != nil {
 			return err
 		}
 
 		fmt.Println("faz initialized")
 		fmt.Println("Directory:", fazDir)
 		fmt.Println("Database:", dbPath)
-		if initializedGit {
-			fmt.Println("Git:", "initialized")
+		if addedGitIgnore {
+			fmt.Println("Gitignore:", ".faz/ added")
 		} else {
-			fmt.Println("Git:", "already initialized")
+			fmt.Println("Gitignore:", ".faz/ already present")
 		}
-		fmt.Println("Exclude:", ".git/info/exclude updated")
 		return nil
 	},
 }
 
-func ensureGitRepo(projectDir string) (bool, error) {
-	gitDir := filepath.Join(projectDir, ".git")
-	if stat, err := os.Stat(gitDir); err == nil && stat.IsDir() {
-		return false, nil
-	}
-
-	cmd := exec.Command("git", "init")
-	cmd.Dir = projectDir
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return false, fmt.Errorf("git init failed: %v (%s)", err, strings.TrimSpace(string(output)))
-	}
-
-	return true, nil
-}
-
-func ensureGitExclude(projectDir string) error {
-	excludePath := filepath.Join(projectDir, ".git", "info", "exclude")
-	if err := os.MkdirAll(filepath.Dir(excludePath), 0o755); err != nil {
-		return fmt.Errorf("create .git/info directory: %w", err)
-	}
-
+func ensureGitIgnoreEntry(projectDir, entry string) (bool, error) {
+	gitIgnorePath := filepath.Join(projectDir, ".gitignore")
 	existing := make(map[string]struct{})
-	file, err := os.OpenFile(excludePath, os.O_CREATE|os.O_RDONLY, 0o644)
+	file, err := os.OpenFile(gitIgnorePath, os.O_CREATE|os.O_RDONLY, 0o644)
 	if err != nil {
-		return fmt.Errorf("open .git/info/exclude: %w", err)
+		return false, fmt.Errorf("open .gitignore: %w", err)
 	}
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -94,41 +70,25 @@ func ensureGitExclude(projectDir string) error {
 	}
 	if err := scanner.Err(); err != nil {
 		_ = file.Close()
-		return fmt.Errorf("read .git/info/exclude: %w", err)
+		return false, fmt.Errorf("read .gitignore: %w", err)
 	}
 	_ = file.Close()
 
-	required := []string{
-		".faz/",
-		".claude/",
-		"*CLAUDE.md",
-		"*AGENTS.md",
-		"*PLAN.md",
+	if _, ok := existing[entry]; ok {
+		return false, nil
 	}
 
-	toAppend := make([]string, 0)
-	for _, line := range required {
-		if _, ok := existing[line]; !ok {
-			toAppend = append(toAppend, line)
-		}
-	}
-	if len(toAppend) == 0 {
-		return nil
-	}
-
-	appendFile, err := os.OpenFile(excludePath, os.O_APPEND|os.O_WRONLY, 0o644)
+	appendFile, err := os.OpenFile(gitIgnorePath, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
-		return fmt.Errorf("append .git/info/exclude: %w", err)
+		return false, fmt.Errorf("append .gitignore: %w", err)
 	}
 	defer func() { _ = appendFile.Close() }()
 
-	for _, line := range toAppend {
-		if _, err := appendFile.WriteString(line + "\n"); err != nil {
-			return fmt.Errorf("write .git/info/exclude: %w", err)
-		}
+	if _, err := appendFile.WriteString(entry + "\n"); err != nil {
+		return false, fmt.Errorf("write .gitignore: %w", err)
 	}
 
-	return nil
+	return true, nil
 }
 
 func init() {

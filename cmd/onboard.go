@@ -15,6 +15,7 @@ var onboardCmd = &cobra.Command{
 		cmd.Println("- `faz info` - Show open count and latest completed tasks")
 		cmd.Println("- `faz ready` - Find unblocked work")
 		cmd.Println("- `faz create \"Title\" --type task --priority 2` - Create issue")
+		cmd.Println("- `faz claim <id>` - Claim work and mark in_progress")
 		cmd.Println("- `faz close <id>` - Complete work")
 	},
 }

@@ -45,6 +45,10 @@ func openService() (*service.IssueService, *sql.DB, error) {
 		}
 		return nil, nil, err
 	}
+	if err := db.Migrate(sqlDB); err != nil {
+		_ = sqlDB.Close()
+		return nil, nil, err
+	}
 
 	projectName := filepath.Base(projectDir)
 	issueRepo := repo.NewIssueRepo(sqlDB)
@@ -71,10 +75,7 @@ func printIssueList(issues []model.Issue) {
 		return
 	}
 	for _, issue := range issues {
-		symbol := "✓"
-		if issue.Status == "closed" {
-			symbol = "○"
-		}
+		symbol := statusSymbol(issue.Status)
 
 		priority := colorizePriority(issue.Priority)
 		typeLabel := "[" + issue.Type + "]"
@@ -90,6 +91,19 @@ func printIssueList(issues []model.Issue) {
 		}
 
 		fmt.Printf("%s %s %s %s - %s\n", symbol, issue.ID, priority, typeLabel, title)
+	}
+}
+
+func statusSymbol(status string) string {
+	switch status {
+	case "open":
+		return "○"
+	case "in_progress":
+		return "◐"
+	case "closed":
+		return "✓"
+	default:
+		return "?"
 	}
 }
 

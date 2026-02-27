@@ -17,6 +17,8 @@ func Migrate(db *sql.DB) error {
 			type TEXT NOT NULL,
 			priority INTEGER NOT NULL DEFAULT 2,
 			status TEXT NOT NULL DEFAULT 'open',
+			claimed_at DATETIME,
+			claim_expires_at DATETIME,
 			parent_id INTEGER,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -71,6 +73,8 @@ func ensureIssuesColumns(db *sql.DB) error {
 	defer func() { _ = rows.Close() }()
 
 	hasPublicID := false
+	hasClaimedAt := false
+	hasClaimExpiresAt := false
 	for rows.Next() {
 		var cid int
 		var name string
@@ -84,6 +88,12 @@ func ensureIssuesColumns(db *sql.DB) error {
 		if name == "public_id" {
 			hasPublicID = true
 		}
+		if name == "claimed_at" {
+			hasClaimedAt = true
+		}
+		if name == "claim_expires_at" {
+			hasClaimExpiresAt = true
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("iterate issues table metadata: %w", err)
@@ -94,9 +104,22 @@ func ensureIssuesColumns(db *sql.DB) error {
 			return fmt.Errorf("add public_id column: %w", err)
 		}
 	}
+	if !hasClaimedAt {
+		if _, err := db.Exec(`ALTER TABLE issues ADD COLUMN claimed_at DATETIME`); err != nil {
+			return fmt.Errorf("add claimed_at column: %w", err)
+		}
+	}
+	if !hasClaimExpiresAt {
+		if _, err := db.Exec(`ALTER TABLE issues ADD COLUMN claim_expires_at DATETIME`); err != nil {
+			return fmt.Errorf("add claim_expires_at column: %w", err)
+		}
+	}
 
 	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_issues_public_id_unique ON issues(public_id)`); err != nil {
 		return fmt.Errorf("create unique public_id index: %w", err)
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_issues_claim_expires_at ON issues(claim_expires_at)`); err != nil {
+		return fmt.Errorf("create claim_expires_at index: %w", err)
 	}
 
 	return nil

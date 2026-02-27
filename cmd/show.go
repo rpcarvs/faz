@@ -33,6 +33,12 @@ var showCmd = &cobra.Command{
 		fmt.Printf("Type: %s\n", issue.Type)
 		fmt.Printf("Priority: P%d\n", issue.Priority)
 		fmt.Printf("Status: %s\n", issue.Status)
+		if issue.ClaimedAt != nil {
+			fmt.Printf("Claimed at: %s\n", issue.ClaimedAt.Format("2006-01-02 15:04:05"))
+		}
+		if issue.ClaimExpiresAt != nil {
+			fmt.Printf("Claim expires: %s\n", issue.ClaimExpiresAt.Format("2006-01-02 15:04:05"))
+		}
 		if issue.ParentID != nil {
 			fmt.Printf("Parent: %s\n", *issue.ParentID)
 		}

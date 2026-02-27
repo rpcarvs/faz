@@ -31,7 +31,7 @@ faz list --status open
 faz children faz-ab12
 faz ready
 faz show faz-ab12.0
-faz update faz-ab12.0 --status in_progress
+faz claim faz-ab12.0
 faz close faz-ab12.0
 faz reopen faz-ab12.0
 faz info
@@ -42,6 +42,7 @@ faz info
 `faz init` creates:
 
 - `.faz/faz.db`
+- `.gitignore` (if missing) and ensures `.faz/` is listed
 
 Main schema:
 
@@ -50,7 +51,8 @@ Main schema:
 
 ## Notes
 
-- `ready` lists unblocked, non-closed, non-epic issues.
+- `ready` lists unblocked open non-epic issues that are not actively claimed.
 - Root IDs use `<project>-xxxx` and child IDs use `<parent>.<n>`.
 - Valid types: `epic`, `task`, `bug`, `feature`, `chore`, `decision`.
 - Valid statuses: `open`, `in_progress`, `closed`.
+- Status symbols in list outputs: `○` open, `◐` in_progress, `✓` closed.

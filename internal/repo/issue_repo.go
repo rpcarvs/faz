@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"faz/internal/model"
 )
@@ -14,6 +15,11 @@ import (
 type IssueRepo struct {
 	db *sql.DB
 }
+
+var ErrIssueAlreadyClaimed = errors.New("issue is already claimed")
+
+const issueSelectColumns = `i.id, i.public_id, i.title, i.description, i.type, i.priority, i.status,
+	       i.claimed_at, i.claim_expires_at, i.parent_id, p.public_id, i.created_at, i.updated_at, i.closed_at`
 
 // NewIssueRepo builds a repository backed by sqlite.
 func NewIssueRepo(db *sql.DB) *IssueRepo {
@@ -52,12 +58,11 @@ func (r *IssueRepo) CreateIssue(issue model.Issue) (string, error) {
 // GetIssue loads one issue by public ID.
 func (r *IssueRepo) GetIssue(publicID string) (model.Issue, error) {
 	var issue model.Issue
-	err := r.db.QueryRow(`
-		SELECT i.id, i.public_id, i.title, i.description, i.type, i.priority, i.status,
-		       i.parent_id, p.public_id, i.created_at, i.updated_at, i.closed_at
+	err := r.db.QueryRow(fmt.Sprintf(`
+		SELECT %s
 		FROM issues i
 		LEFT JOIN issues p ON p.id = i.parent_id
-		WHERE i.public_id = ?`, publicID).
+		WHERE i.public_id = ?`, issueSelectColumns), publicID).
 		Scan(
 			&issue.InternalID,
 			&issue.ID,
@@ -66,6 +71,8 @@ func (r *IssueRepo) GetIssue(publicID string) (model.Issue, error) {
 			&issue.Type,
 			&issue.Priority,
 			&issue.Status,
+			&issue.ClaimedAt,
+			&issue.ClaimExpiresAt,
 			&issue.ParentInternal,
 			&issue.ParentID,
 			&issue.CreatedAt,
@@ -107,13 +114,12 @@ func (r *IssueRepo) NextChildIndex(parentPublicID string) (int, error) {
 
 // ListChildren returns direct child issues.
 func (r *IssueRepo) ListChildren(parentPublicID string) ([]model.Issue, error) {
-	rows, err := r.db.Query(`
-		SELECT i.id, i.public_id, i.title, i.description, i.type, i.priority, i.status,
-		       i.parent_id, p.public_id, i.created_at, i.updated_at, i.closed_at
+	rows, err := r.db.Query(fmt.Sprintf(`
+		SELECT %s
 		FROM issues i
 		JOIN issues p ON p.id = i.parent_id
 		WHERE p.public_id = ?
-		ORDER BY i.priority ASC, i.id ASC`, parentPublicID)
+		ORDER BY i.priority ASC, i.id ASC`, issueSelectColumns), parentPublicID)
 	if err != nil {
 		return nil, fmt.Errorf("query child issues: %w", err)
 	}
@@ -124,15 +130,14 @@ func (r *IssueRepo) ListChildren(parentPublicID string) ([]model.Issue, error) {
 
 // ListDependencies returns blockers for an issue.
 func (r *IssueRepo) ListDependencies(publicID string) ([]model.Issue, error) {
-	rows, err := r.db.Query(`
-		SELECT i.id, i.public_id, i.title, i.description, i.type, i.priority, i.status,
-		       i.parent_id, p.public_id, i.created_at, i.updated_at, i.closed_at
+	rows, err := r.db.Query(fmt.Sprintf(`
+		SELECT %s
 		FROM dependencies d
 		JOIN issues source ON source.id = d.issue_id
 		JOIN issues i ON i.id = d.depends_on_id
 		LEFT JOIN issues p ON p.id = i.parent_id
 		WHERE source.public_id = ?
-		ORDER BY i.priority ASC, i.id ASC`, publicID)
+		ORDER BY i.priority ASC, i.id ASC`, issueSelectColumns), publicID)
 	if err != nil {
 		return nil, fmt.Errorf("query dependencies: %w", err)
 	}
@@ -143,15 +148,14 @@ func (r *IssueRepo) ListDependencies(publicID string) ([]model.Issue, error) {
 
 // ListDependents returns issues blocked by a target issue.
 func (r *IssueRepo) ListDependents(publicID string) ([]model.Issue, error) {
-	rows, err := r.db.Query(`
-		SELECT i.id, i.public_id, i.title, i.description, i.type, i.priority, i.status,
-		       i.parent_id, p.public_id, i.created_at, i.updated_at, i.closed_at
+	rows, err := r.db.Query(fmt.Sprintf(`
+		SELECT %s
 		FROM dependencies d
 		JOIN issues source ON source.id = d.depends_on_id
 		JOIN issues i ON i.id = d.issue_id
 		LEFT JOIN issues p ON p.id = i.parent_id
 		WHERE source.public_id = ?
-		ORDER BY i.priority ASC, i.id ASC`, publicID)
+		ORDER BY i.priority ASC, i.id ASC`, issueSelectColumns), publicID)
 	if err != nil {
 		return nil, fmt.Errorf("query dependents: %w", err)
 	}
@@ -163,8 +167,7 @@ func (r *IssueRepo) ListDependents(publicID string) ([]model.Issue, error) {
 // ListIssues returns issues filtered by optional criteria.
 func (r *IssueRepo) ListIssues(filter model.ListFilter) ([]model.Issue, error) {
 	query := `
-		SELECT i.id, i.public_id, i.title, i.description, i.type, i.priority, i.status,
-		       i.parent_id, p.public_id, i.created_at, i.updated_at, i.closed_at
+		SELECT ` + issueSelectColumns + `
 		FROM issues i
 		LEFT JOIN issues p ON p.id = i.parent_id`
 
@@ -279,7 +282,12 @@ func (r *IssueRepo) UpdateIssue(publicID string, fields map[string]any) error {
 // CloseIssue marks an issue as closed.
 func (r *IssueRepo) CloseIssue(publicID string) error {
 	result, err := r.db.Exec(
-		`UPDATE issues SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE public_id = ?`, publicID,
+		`UPDATE issues
+		 SET status = 'closed',
+		     closed_at = CURRENT_TIMESTAMP,
+		     claimed_at = NULL,
+		     claim_expires_at = NULL
+		 WHERE public_id = ?`, publicID,
 	)
 	if err != nil {
 		return fmt.Errorf("close issue: %w", err)
@@ -298,7 +306,12 @@ func (r *IssueRepo) CloseIssue(publicID string) error {
 // ReopenIssue marks an issue as open.
 func (r *IssueRepo) ReopenIssue(publicID string) error {
 	result, err := r.db.Exec(
-		`UPDATE issues SET status = 'open', closed_at = NULL WHERE public_id = ?`, publicID,
+		`UPDATE issues
+		 SET status = 'open',
+		     closed_at = NULL,
+		     claimed_at = NULL,
+		     claim_expires_at = NULL
+		 WHERE public_id = ?`, publicID,
 	)
 	if err != nil {
 		return fmt.Errorf("reopen issue: %w", err)
@@ -361,12 +374,12 @@ func (r *IssueRepo) RemoveDependency(issueID, dependsOnID string) error {
 
 // ReadyIssues lists open work with no open blockers.
 func (r *IssueRepo) ReadyIssues() ([]model.Issue, error) {
-	rows, err := r.db.Query(`
-		SELECT i.id, i.public_id, i.title, i.description, i.type, i.priority, i.status,
-		       i.parent_id, p.public_id, i.created_at, i.updated_at, i.closed_at
+	rows, err := r.db.Query(fmt.Sprintf(`
+		SELECT %s
 		FROM issues i
 		LEFT JOIN issues p ON p.id = i.parent_id
-		WHERE i.status != 'closed'
+		WHERE i.status = 'open'
+		  AND (i.claim_expires_at IS NULL OR i.claim_expires_at <= CURRENT_TIMESTAMP)
 		  AND i.type != 'epic'
 		  AND NOT EXISTS (
 			SELECT 1
@@ -375,7 +388,7 @@ func (r *IssueRepo) ReadyIssues() ([]model.Issue, error) {
 			WHERE d.issue_id = i.id
 			  AND b.status != 'closed'
 		  )
-		ORDER BY i.priority ASC, i.id ASC`)
+		ORDER BY i.priority ASC, i.id ASC`, issueSelectColumns))
 	if err != nil {
 		return nil, fmt.Errorf("query ready issues: %w", err)
 	}
@@ -395,14 +408,13 @@ func (r *IssueRepo) OpenIssueCount() (int64, error) {
 
 // RecentCompleted returns latest closed issues.
 func (r *IssueRepo) RecentCompleted(limit int) ([]model.Issue, error) {
-	rows, err := r.db.Query(`
-		SELECT i.id, i.public_id, i.title, i.description, i.type, i.priority, i.status,
-		       i.parent_id, p.public_id, i.created_at, i.updated_at, i.closed_at
+	rows, err := r.db.Query(fmt.Sprintf(`
+		SELECT %s
 		FROM issues i
 		LEFT JOIN issues p ON p.id = i.parent_id
 		WHERE i.status = 'closed'
 		ORDER BY i.closed_at DESC, i.id DESC
-		LIMIT ?`, limit)
+		LIMIT ?`, issueSelectColumns), limit)
 	if err != nil {
 		return nil, fmt.Errorf("query completed issues: %w", err)
 	}
@@ -423,6 +435,8 @@ func scanIssues(rows *sql.Rows) ([]model.Issue, error) {
 			&issue.Type,
 			&issue.Priority,
 			&issue.Status,
+			&issue.ClaimedAt,
+			&issue.ClaimExpiresAt,
 			&issue.ParentInternal,
 			&issue.ParentID,
 			&issue.CreatedAt,
@@ -438,4 +452,46 @@ func scanIssues(rows *sql.Rows) ([]model.Issue, error) {
 	}
 
 	return issues, nil
+}
+
+// ClaimIssue atomically claims an issue by moving it to in_progress with a TTL.
+func (r *IssueRepo) ClaimIssue(publicID string, lease time.Duration) error {
+	modifier := fmt.Sprintf("+%d seconds", int(lease.Seconds()))
+	result, err := r.db.Exec(
+		`UPDATE issues
+		 SET status = 'in_progress',
+		     claimed_at = CURRENT_TIMESTAMP,
+		     claim_expires_at = DATETIME(CURRENT_TIMESTAMP, ?)
+		 WHERE public_id = ?
+		   AND status != 'closed'
+		   AND (
+			(claim_expires_at IS NULL)
+			OR (claim_expires_at <= CURRENT_TIMESTAMP)
+		   )`,
+		modifier,
+		publicID,
+	)
+	if err != nil {
+		return fmt.Errorf("claim issue: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check claim result: %w", err)
+	}
+	if rowsAffected > 0 {
+		return nil
+	}
+
+	issue, getErr := r.GetIssue(publicID)
+	if getErr != nil {
+		return getErr
+	}
+	if issue.Status == "closed" {
+		return fmt.Errorf("issue %q is closed", publicID)
+	}
+	if issue.ClaimExpiresAt != nil && issue.ClaimExpiresAt.After(time.Now()) {
+		return ErrIssueAlreadyClaimed
+	}
+	return ErrIssueAlreadyClaimed
 }

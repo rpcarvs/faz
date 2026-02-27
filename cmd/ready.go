@@ -25,7 +25,7 @@ var readyCmd = &cobra.Command{
 			fmt.Println("No ready work")
 			return nil
 		}
-		printIssueTable(issues)
+		printIssueList(issues)
 		return nil
 	},
 }

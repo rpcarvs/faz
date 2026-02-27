@@ -139,6 +139,14 @@ func (s *IssueService) Reopen(publicID string) error {
 	return s.repo.ReopenIssue(publicID)
 }
 
+// Claim atomically assigns an issue lease and marks it in_progress.
+func (s *IssueService) Claim(publicID string, lease time.Duration) error {
+	if lease <= 0 {
+		return fmt.Errorf("claim lease must be greater than zero")
+	}
+	return s.repo.ClaimIssue(publicID, lease)
+}
+
 // Delete permanently removes an issue.
 func (s *IssueService) Delete(publicID string) error {
 	return s.repo.DeleteIssue(publicID)
