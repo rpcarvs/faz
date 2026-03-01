@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -171,5 +172,159 @@ func TestCloseIssueClearsClaimFields(t *testing.T) {
 	}
 	if closed.ClaimedAt != nil || closed.ClaimExpiresAt != nil {
 		t.Fatalf("expected claim fields to be cleared on close")
+	}
+}
+
+func TestNextChildIndexReusesDeletedGap(t *testing.T) {
+	projectDir := t.TempDir()
+	dbPath, err := db.EnsureProjectFiles(projectDir)
+	if err != nil {
+		t.Fatalf("ensure project files: %v", err)
+	}
+
+	sqlDB, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer func() { _ = sqlDB.Close() }()
+
+	if err := db.Migrate(sqlDB); err != nil {
+		t.Fatalf("migrate db: %v", err)
+	}
+
+	repo := NewIssueRepo(sqlDB)
+	parentID, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-p111",
+		Title:    "Parent",
+		Type:     "epic",
+		Priority: 1,
+		Status:   "open",
+	})
+	if err != nil {
+		t.Fatalf("create parent: %v", err)
+	}
+	if _, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-p111.0",
+		Title:    "Child 0",
+		Type:     "task",
+		Priority: 1,
+		Status:   "open",
+		ParentID: &parentID,
+	}); err != nil {
+		t.Fatalf("create child 0: %v", err)
+	}
+	if _, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-p111.1",
+		Title:    "Child 1",
+		Type:     "task",
+		Priority: 1,
+		Status:   "open",
+		ParentID: &parentID,
+	}); err != nil {
+		t.Fatalf("create child 1: %v", err)
+	}
+
+	if err := repo.DeleteIssue("faz-p111.0"); err != nil {
+		t.Fatalf("delete child 0: %v", err)
+	}
+
+	next, err := repo.NextChildIndex(parentID)
+	if err != nil {
+		t.Fatalf("next child index: %v", err)
+	}
+	if next != 0 {
+		t.Fatalf("expected reused index 0, got %d", next)
+	}
+}
+
+func TestListIssuesOrdersByPublicID(t *testing.T) {
+	projectDir := t.TempDir()
+	dbPath, err := db.EnsureProjectFiles(projectDir)
+	if err != nil {
+		t.Fatalf("ensure project files: %v", err)
+	}
+
+	sqlDB, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer func() { _ = sqlDB.Close() }()
+
+	if err := db.Migrate(sqlDB); err != nil {
+		t.Fatalf("migrate db: %v", err)
+	}
+
+	repo := NewIssueRepo(sqlDB)
+
+	parentA, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-a111",
+		Title:    "Parent A",
+		Type:     "epic",
+		Priority: 3,
+		Status:   "open",
+	})
+	if err != nil {
+		t.Fatalf("create parent A: %v", err)
+	}
+	parentB, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-b111",
+		Title:    "Parent B",
+		Type:     "epic",
+		Priority: 1,
+		Status:   "open",
+	})
+	if err != nil {
+		t.Fatalf("create parent B: %v", err)
+	}
+
+	if _, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-a111.0",
+		Title:    "A child low priority",
+		Type:     "task",
+		Priority: 3,
+		Status:   "open",
+		ParentID: &parentA,
+	}); err != nil {
+		t.Fatalf("create a child 0: %v", err)
+	}
+	if _, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-a111.1",
+		Title:    "A child high priority",
+		Type:     "task",
+		Priority: 1,
+		Status:   "open",
+		ParentID: &parentA,
+	}); err != nil {
+		t.Fatalf("create a child 1: %v", err)
+	}
+	if _, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-b111.0",
+		Title:    "B child",
+		Type:     "task",
+		Priority: 2,
+		Status:   "open",
+		ParentID: &parentB,
+	}); err != nil {
+		t.Fatalf("create b child: %v", err)
+	}
+
+	issues, err := repo.ListIssues(model.ListFilter{All: true})
+	if err != nil {
+		t.Fatalf("list issues: %v", err)
+	}
+
+	gotIDs := make([]string, 0, len(issues))
+	for _, issue := range issues {
+		gotIDs = append(gotIDs, issue.ID)
+	}
+	wantIDs := []string{
+		"faz-a111",
+		"faz-a111.0",
+		"faz-a111.1",
+		"faz-b111",
+		"faz-b111.0",
+	}
+	if !reflect.DeepEqual(gotIDs, wantIDs) {
+		t.Fatalf("unexpected list ordering, got=%v want=%v", gotIDs, wantIDs)
 	}
 }

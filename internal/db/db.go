@@ -12,7 +12,7 @@ import (
 
 const (
 	DirName    = ".faz"
-	DBFileName = "faz.db"
+	DBFileName = "taskstore.db"
 )
 
 var ErrNotInitialized = errors.New("faz project is not initialized")

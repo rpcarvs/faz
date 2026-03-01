@@ -43,6 +43,6 @@ var claimCmd = &cobra.Command{
 }
 
 func init() {
-	claimCmd.Flags().DurationVar(&claimTTL, "ttl", time.Hour, "Claim lease duration (example: 30m, 1h)")
+	claimCmd.Flags().DurationVar(&claimTTL, "ttl", 10*time.Minute, "Claim lease duration (example: 10m, 30m, 1h)")
 	rootCmd.AddCommand(claimCmd)
 }

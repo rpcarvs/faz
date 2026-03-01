@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -105,11 +106,37 @@ func (r *IssueRepo) NextChildIndex(parentPublicID string) (int, error) {
 		return 0, err
 	}
 
-	var count int
-	if err := r.db.QueryRow(`SELECT COUNT(*) FROM issues WHERE parent_id = ?`, parent.InternalID).Scan(&count); err != nil {
-		return 0, fmt.Errorf("count child issues: %w", err)
+	rows, err := r.db.Query(`SELECT public_id FROM issues WHERE parent_id = ?`, parent.InternalID)
+	if err != nil {
+		return 0, fmt.Errorf("query child IDs: %w", err)
 	}
-	return count, nil
+	defer func() { _ = rows.Close() }()
+
+	used := make(map[int]struct{})
+	prefix := parentPublicID + "."
+	for rows.Next() {
+		var childID string
+		if err := rows.Scan(&childID); err != nil {
+			return 0, fmt.Errorf("scan child ID: %w", err)
+		}
+		raw := strings.TrimPrefix(childID, prefix)
+		suffix, err := strconv.Atoi(raw)
+		if err != nil {
+			continue
+		}
+		if suffix >= 0 {
+			used[suffix] = struct{}{}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("iterate child IDs: %w", err)
+	}
+
+	for idx := 0; ; idx++ {
+		if _, ok := used[idx]; !ok {
+			return idx, nil
+		}
+	}
 }
 
 // ListChildren returns direct child issues.
@@ -196,7 +223,7 @@ func (r *IssueRepo) ListIssues(filter model.ListFilter) ([]model.Issue, error) {
 	if len(where) > 0 {
 		query = query + " WHERE " + strings.Join(where, " AND ")
 	}
-	query = query + " ORDER BY i.priority ASC, i.created_at ASC"
+	query = query + " ORDER BY i.public_id ASC"
 
 	rows, err := r.db.Query(query, args...)
 	if err != nil {

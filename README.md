@@ -41,7 +41,7 @@ faz info
 
 `faz init` creates:
 
-- `.faz/faz.db`
+- `.faz/taskstore.db`
 - `.gitignore` (if missing) and ensures `.faz/` is listed
 
 Main schema:
