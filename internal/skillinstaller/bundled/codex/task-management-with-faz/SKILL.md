@@ -36,12 +36,13 @@ Follow this lifecycle in order for every coding session.
 4. Close
 - Run `faz close <id>` for completed non-epic work.
 - Confirm epic progress with `faz show <epic-id>`.
+- Close epics after all children are done. DO NOT end the sessions leaving open epics with no children.
 
 ## Non-Negotiable Constraints
 
 - Never claim epics.
 - If another workflow skill is active, still run faz lifecycle in parallel.
-- Close epics after all children are closed and the epic is considered done.
+- Close epics after all children are closed and the epic is done.
 
 ## Command Set
 

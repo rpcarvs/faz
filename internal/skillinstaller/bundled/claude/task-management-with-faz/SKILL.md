@@ -85,5 +85,6 @@ You can only `faz claim` items of type task, bug, feature, chore, or decision. N
 
 ## Close Epics after Done
 
-Close epics after all children are closed and the epic is considered done.
+- Close epics after all children are closed and the epic is done.
+- DO NOT end the sessions leaving open epics with no children.
 

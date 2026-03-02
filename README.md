@@ -41,6 +41,21 @@ faz info
 
 Use `--force` with installer commands to overwrite an existing skill install.
 
+## Install skills
+
+`faz` ships built-in installer commands for the `task-management-with-faz` skill:
+
+```bash
+faz install codex-skill
+faz install claude-skill
+```
+
+Behavior:
+
+- Installs the skill into the target agent skill directory.
+- Prints the final installed path after success.
+- Fails if the destination already exists, unless `--force` is passed.
+
 ## Storage model
 
 `faz init` creates:
