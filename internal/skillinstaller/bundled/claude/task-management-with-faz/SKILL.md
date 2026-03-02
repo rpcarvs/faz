@@ -21,7 +21,7 @@ NO CODE WITHOUT `faz claim` FIRST
 
 - Not one line. Not a "quick fix." Not "I'll register it after." Claim first, code second.
 - Add meaningful and rich descriptions for the tasks so other agents will know what needs to be done by just reading the task.
-- Split tasks in actionable units instead of aggregating many logical steps in only one task.
+- Prefer to create many tasks in smaller actionable units instead of aggregating many steps in only one task.
 
 ## Lifecycle: Orient -> Plan -> Execute -> Close
 
@@ -49,8 +49,6 @@ Run `faz recap` for a full command overview.
 | Mark done | `faz close <id>` |
 | Scope changed | `faz update <id> --description "..."` |
 | New requirement | Create new task under epic first, then code |
-
-Run commands one at a time to avoid collisions. Create tasks one at a time.
 
 ## Integration with Other Skills
 
@@ -84,4 +82,8 @@ When spawning subagents via the Agent tool, always include the full content of t
 ## Only Claim Non-Epic Items
 
 You can only `faz claim` items of type task, bug, feature, chore, or decision. Never claim an epic directly. Epics are containers. Claim their children.
+
+## Close Epics after Done
+
+Close epics after all children are closed and the epic is considered done.
 

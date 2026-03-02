@@ -56,6 +56,9 @@ Main schema:
 ## Notes
 
 - `ready` lists unblocked open non-epic issues that are not actively claimed.
+- `in_progress` is lease-based and can only be set via `faz claim`.
+- `faz claim` is for executable work items. Epics are not claimable.
+- If a task is already claimed, `faz claim` returns a non-zero exit code.
 - Root IDs use `<project>-xxxx` and child IDs use `<parent>.<n>`.
 - Valid types: `epic`, `task`, `bug`, `feature`, `chore`, `decision`.
 - Valid statuses: `open`, `in_progress`, `closed`.

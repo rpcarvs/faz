@@ -18,6 +18,7 @@ type IssueRepo struct {
 }
 
 var ErrIssueAlreadyClaimed = errors.New("issue is already claimed")
+var ErrIssueTypeNotClaimable = errors.New("issue type is not claimable")
 
 const issueSelectColumns = `i.id, i.public_id, i.title, i.description, i.type, i.priority, i.status,
 	       i.claimed_at, i.claim_expires_at, i.parent_id, p.public_id, i.created_at, i.updated_at, i.closed_at`
@@ -450,6 +451,7 @@ func (r *IssueRepo) RecentCompleted(limit int) ([]model.Issue, error) {
 	return scanIssues(rows)
 }
 
+// scanIssues consumes query rows into issue models.
 func scanIssues(rows *sql.Rows) ([]model.Issue, error) {
 	issues := make([]model.Issue, 0)
 	for rows.Next() {
@@ -491,6 +493,7 @@ func (r *IssueRepo) ClaimIssue(publicID string, lease time.Duration) error {
 		     claim_expires_at = DATETIME(CURRENT_TIMESTAMP, ?)
 		 WHERE public_id = ?
 		   AND status != 'closed'
+		   AND type != 'epic'
 		   AND (
 			(claim_expires_at IS NULL)
 			OR (claim_expires_at <= CURRENT_TIMESTAMP)
@@ -516,6 +519,9 @@ func (r *IssueRepo) ClaimIssue(publicID string, lease time.Duration) error {
 	}
 	if issue.Status == "closed" {
 		return fmt.Errorf("issue %q is closed", publicID)
+	}
+	if issue.Type == "epic" {
+		return ErrIssueTypeNotClaimable
 	}
 	if issue.ClaimExpiresAt != nil && issue.ClaimExpiresAt.After(time.Now()) {
 		return ErrIssueAlreadyClaimed

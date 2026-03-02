@@ -54,10 +54,6 @@ func Migrate(db *sql.DB) error {
 		return err
 	}
 
-	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_issues_public_id ON issues(public_id)`); err != nil {
-		return fmt.Errorf("create public_id index: %w", err)
-	}
-
 	if _, err := db.Exec(`UPDATE issues SET public_id = 'legacy-' || id WHERE public_id IS NULL OR public_id = ''`); err != nil {
 		return fmt.Errorf("backfill public IDs: %w", err)
 	}
@@ -65,6 +61,7 @@ func Migrate(db *sql.DB) error {
 	return nil
 }
 
+// ensureIssuesColumns adds missing issues columns and indexes for upgrades.
 func ensureIssuesColumns(db *sql.DB) error {
 	rows, err := db.Query(`PRAGMA table_info(issues);`)
 	if err != nil {
@@ -117,6 +114,9 @@ func ensureIssuesColumns(db *sql.DB) error {
 
 	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_issues_public_id_unique ON issues(public_id)`); err != nil {
 		return fmt.Errorf("create unique public_id index: %w", err)
+	}
+	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_issues_public_id`); err != nil {
+		return fmt.Errorf("drop redundant public_id index: %w", err)
 	}
 	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_issues_claim_expires_at ON issues(claim_expires_at)`); err != nil {
 		return fmt.Errorf("create claim_expires_at index: %w", err)

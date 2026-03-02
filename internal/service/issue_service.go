@@ -31,6 +31,11 @@ var publicIDRegex = regexp.MustCompile(`^[a-z0-9_]+-[a-z0-9]{4}(\.[0-9]+)?$`)
 
 const idAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
 
+const (
+	maxCreateAttempts = 8
+	baseCreateBackoff = 20 * time.Millisecond
+)
+
 // IssueService contains business rules for task lifecycle operations.
 type IssueService struct {
 	repo         *repo.IssueRepo
@@ -70,13 +75,30 @@ func (s *IssueService) Create(issue model.Issue) (string, error) {
 		return "", fmt.Errorf("priority must be between 0 and 3")
 	}
 
-	publicID, err := s.nextPublicID(issue.ParentID)
-	if err != nil {
-		return "", err
-	}
-	issue.ID = publicID
+	var lastRetryErr error
+	for attempt := 0; attempt < maxCreateAttempts; attempt++ {
+		publicID, err := s.nextPublicID(issue.ParentID)
+		if err != nil {
+			return "", err
+		}
+		issue.ID = publicID
 
-	return s.repo.CreateIssue(issue)
+		id, err := s.repo.CreateIssue(issue)
+		if err == nil {
+			return id, nil
+		}
+		if !isRetryableCreateError(err) {
+			return "", err
+		}
+
+		lastRetryErr = err
+		time.Sleep(createBackoff(attempt))
+	}
+
+	if lastRetryErr != nil {
+		return "", fmt.Errorf("create issue failed after %d attempts: %w", maxCreateAttempts, lastRetryErr)
+	}
+	return "", fmt.Errorf("create issue failed after %d attempts", maxCreateAttempts)
 }
 
 // Update validates requested fields and applies changes.
@@ -102,6 +124,9 @@ func (s *IssueService) Update(publicID string, fields map[string]any) error {
 			status := strings.TrimSpace(value.(string))
 			if _, ok := validStatuses[status]; !ok {
 				return fmt.Errorf("invalid status %q", status)
+			}
+			if status == "in_progress" {
+				return fmt.Errorf("status %q can only be set via `faz claim`", status)
 			}
 			clean[key] = status
 		case "priority":
@@ -250,6 +275,7 @@ func ValidStatuses() []string {
 	return out
 }
 
+// nextPublicID chooses the next root or child ID for a new issue.
 func (s *IssueService) nextPublicID(parentID *string) (string, error) {
 	if parentID != nil {
 		parentPublicID, err := NormalizeIssueID(*parentID)
@@ -279,6 +305,7 @@ func (s *IssueService) nextPublicID(parentID *string) (string, error) {
 	return "", fmt.Errorf("could not generate unique issue ID")
 }
 
+// randomSuffix generates a random alphanumeric suffix for root issue IDs.
 func (s *IssueService) randomSuffix(size int) string {
 	builder := strings.Builder{}
 	builder.Grow(size)
@@ -288,6 +315,7 @@ func (s *IssueService) randomSuffix(size int) string {
 	return builder.String()
 }
 
+// normalizeProjectToken converts a directory name into a stable ID prefix token.
 func normalizeProjectToken(projectName string) string {
 	clean := strings.ToLower(strings.TrimSpace(projectName))
 	if clean == "" {
@@ -313,4 +341,51 @@ func normalizeProjectToken(projectName string) string {
 		return "project"
 	}
 	return result
+}
+
+// isRetryableCreateError reports whether create should retry this error chain.
+func isRetryableCreateError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	for current := err; current != nil; current = unwrap(current) {
+		if isRetryableCreateText(strings.ToLower(current.Error())) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// createBackoff computes bounded exponential delay between create retries.
+func createBackoff(attempt int) time.Duration {
+	if attempt < 0 {
+		return baseCreateBackoff
+	}
+	multiplier := 1 << attempt
+	if multiplier > 16 {
+		multiplier = 16
+	}
+	return time.Duration(multiplier) * baseCreateBackoff
+}
+
+// isRetryableCreateText classifies SQLite contention and ID collision errors.
+func isRetryableCreateText(text string) bool {
+	if strings.Contains(text, "sqlite_busy") || strings.Contains(text, "database is locked") {
+		return true
+	}
+	return strings.Contains(text, "unique constraint failed: issues.public_id")
+}
+
+// unwrap returns the next wrapped error when available.
+func unwrap(err error) error {
+	type unwrapper interface {
+		Unwrap() error
+	}
+	w, ok := err.(unwrapper)
+	if !ok {
+		return nil
+	}
+	return w.Unwrap()
 }

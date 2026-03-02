@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// newCodexSkillCommand installs the bundled Codex skill package.
 func newCodexSkillCommand() *cobra.Command {
 	var force bool
 

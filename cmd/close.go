@@ -1,10 +1,6 @@
 package cmd
 
-import (
-	"fmt"
-
-	"github.com/spf13/cobra"
-)
+import "github.com/spf13/cobra"
 
 var closeCmd = &cobra.Command{
 	Use:   "close <id> [id...]",
@@ -26,8 +22,8 @@ var closeCmd = &cobra.Command{
 			if err := svc.Close(id); err != nil {
 				return err
 			}
-			fmt.Printf("Closed issue: %s\n", id)
-			fmt.Printf("  Status: closed\n")
+			cmd.Printf("Closed issue: %s\n", id)
+			cmd.Printf("  Status: closed\n")
 		}
 
 		return nil

@@ -1,10 +1,6 @@
 package cmd
 
-import (
-	"fmt"
-
-	"github.com/spf13/cobra"
-)
+import "github.com/spf13/cobra"
 
 var deleteCmd = &cobra.Command{
 	Use:   "delete <id> [id...]",
@@ -26,7 +22,7 @@ var deleteCmd = &cobra.Command{
 			if err := svc.Delete(id); err != nil {
 				return err
 			}
-			fmt.Printf("Deleted issue: %s\n", id)
+			cmd.Printf("Deleted issue: %s\n", id)
 		}
 		return nil
 	},

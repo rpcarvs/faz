@@ -43,7 +43,7 @@ var listCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		printIssueList(issues)
+		printIssueList(cmd.OutOrStdout(), issues)
 		return nil
 	},
 }

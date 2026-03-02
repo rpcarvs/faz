@@ -1,10 +1,6 @@
 package cmd
 
-import (
-	"fmt"
-
-	"github.com/spf13/cobra"
-)
+import "github.com/spf13/cobra"
 
 var readyCmd = &cobra.Command{
 	Use:   "ready",
@@ -22,10 +18,10 @@ var readyCmd = &cobra.Command{
 		}
 
 		if len(issues) == 0 {
-			fmt.Println("No ready work")
+			cmd.Println("No ready work")
 			return nil
 		}
-		printIssueList(issues)
+		printIssueList(cmd.OutOrStdout(), issues)
 		return nil
 	},
 }

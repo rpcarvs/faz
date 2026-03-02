@@ -1,10 +1,6 @@
 package cmd
 
-import (
-	"fmt"
-
-	"github.com/spf13/cobra"
-)
+import "github.com/spf13/cobra"
 
 var infoCmd = &cobra.Command{
 	Use:   "info",
@@ -21,11 +17,11 @@ var infoCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Open issues: %d\n", openCount)
-		fmt.Println()
-		fmt.Println("Latest completed (max 5):")
+		cmd.Printf("Open issues: %d\n", openCount)
+		cmd.Println()
+		cmd.Println("Latest completed (max 5):")
 		if len(completed) == 0 {
-			fmt.Println("  none")
+			cmd.Println("  none")
 			return nil
 		}
 		for _, issue := range completed {
@@ -33,7 +29,7 @@ var infoCmd = &cobra.Command{
 			if issue.ClosedAt != nil {
 				closedAt = issue.ClosedAt.Format("2006-01-02 15:04")
 			}
-			fmt.Printf("  %s [%s P%d] %s (closed %s)\n", issue.ID, issue.Type, issue.Priority, issue.Title, closedAt)
+			cmd.Printf("  %s [%s P%d] %s (closed %s)\n", issue.ID, issue.Type, issue.Priority, issue.Title, closedAt)
 		}
 
 		return nil

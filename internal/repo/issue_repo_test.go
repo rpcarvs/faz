@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -172,6 +173,41 @@ func TestCloseIssueClearsClaimFields(t *testing.T) {
 	}
 	if closed.ClaimedAt != nil || closed.ClaimExpiresAt != nil {
 		t.Fatalf("expected claim fields to be cleared on close")
+	}
+}
+
+func TestClaimIssueRejectsEpic(t *testing.T) {
+	projectDir := t.TempDir()
+	dbPath, err := db.EnsureProjectFiles(projectDir)
+	if err != nil {
+		t.Fatalf("ensure project files: %v", err)
+	}
+
+	sqlDB, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer func() { _ = sqlDB.Close() }()
+
+	if err := db.Migrate(sqlDB); err != nil {
+		t.Fatalf("migrate db: %v", err)
+	}
+
+	repo := NewIssueRepo(sqlDB)
+	epicID, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-z111",
+		Title:    "Epic container",
+		Type:     "epic",
+		Priority: 1,
+		Status:   "open",
+	})
+	if err != nil {
+		t.Fatalf("create epic: %v", err)
+	}
+
+	err = repo.ClaimIssue(epicID, time.Hour)
+	if !errors.Is(err, ErrIssueTypeNotClaimable) {
+		t.Fatalf("expected ErrIssueTypeNotClaimable, got %v", err)
 	}
 }
 

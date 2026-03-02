@@ -17,6 +17,11 @@ var onboardCmd = &cobra.Command{
 		cmd.Println("- `faz create \"Title\" --type task --priority 2` - Create issue")
 		cmd.Println("- `faz claim <id>` - Claim work and mark in_progress")
 		cmd.Println("- `faz close <id>` - Complete work")
+		cmd.Println("")
+		cmd.Println("Claim rules:")
+		cmd.Println("- `in_progress` is set by `faz claim`, not by `faz update --status`")
+		cmd.Println("- Epics are containers and cannot be claimed")
+		cmd.Println("- If a task is already claimed, `faz claim` exits non-zero")
 	},
 }
 

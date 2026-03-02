@@ -27,8 +27,8 @@ var childrenCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Children of %s:\n", ids[0])
-		printIssueList(children)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Children of %s:\n", ids[0])
+		printIssueList(cmd.OutOrStdout(), children)
 		return nil
 	},
 }

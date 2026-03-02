@@ -1,10 +1,8 @@
-/*
-Copyright © 2026 NAME HERE <EMAIL ADDRESS>
-*/
 package main
 
 import "faz/cmd"
 
+// main executes the root CLI command tree.
 func main() {
 	cmd.Execute()
 }

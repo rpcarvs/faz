@@ -33,10 +33,16 @@ func Open(dbPath string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite database: %w", err)
 	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("ping sqlite database: %w", err)
+	}
+	if err := applyConnectionPragmas(db); err != nil {
+		_ = db.Close()
+		return nil, err
 	}
 
 	return db, nil
@@ -55,4 +61,18 @@ func OpenProjectDB(projectDir string) (*sql.DB, string, error) {
 	}
 
 	return db, dbPath, nil
+}
+
+// applyConnectionPragmas enables lock waiting and concurrent read/write mode.
+func applyConnectionPragmas(db *sql.DB) error {
+	statements := []string{
+		`PRAGMA busy_timeout = 5000;`,
+		`PRAGMA foreign_keys = ON;`,
+	}
+	for _, stmt := range statements {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("apply sqlite pragma %q: %w", stmt, err)
+		}
+	}
+	return nil
 }

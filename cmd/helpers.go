@@ -3,6 +3,7 @@ package cmd
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,6 +25,7 @@ const (
 	ansiYellow = "\033[33m"
 )
 
+// currentProjectDir resolves the active working directory for project-scoped commands.
 func currentProjectDir() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -32,6 +34,7 @@ func currentProjectDir() (string, error) {
 	return cwd, nil
 }
 
+// openService opens the initialized project DB and builds the issue service.
 func openService() (*service.IssueService, *sql.DB, error) {
 	projectDir, err := currentProjectDir()
 	if err != nil {
@@ -45,33 +48,31 @@ func openService() (*service.IssueService, *sql.DB, error) {
 		}
 		return nil, nil, err
 	}
-	if err := db.Migrate(sqlDB); err != nil {
-		_ = sqlDB.Close()
-		return nil, nil, err
-	}
 
 	projectName := filepath.Base(projectDir)
 	issueRepo := repo.NewIssueRepo(sqlDB)
 	return service.NewIssueService(issueRepo, projectName), sqlDB, nil
 }
 
-func printIssueTable(issues []model.Issue) {
+// printIssueTable writes tabular issue rows to the provided writer.
+func printIssueTable(writer io.Writer, issues []model.Issue) {
 	if len(issues) == 0 {
-		fmt.Println("No issues found")
+		_, _ = fmt.Fprintln(writer, "No issues found")
 		return
 	}
 
-	writer := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	_, _ = fmt.Fprintln(writer, "ID\tTYPE\tPRIORITY\tSTATUS\tTITLE")
+	tableWriter := tabwriter.NewWriter(writer, 0, 4, 2, ' ', 0)
+	_, _ = fmt.Fprintln(tableWriter, "ID\tTYPE\tPRIORITY\tSTATUS\tTITLE")
 	for _, issue := range issues {
-		_, _ = fmt.Fprintf(writer, "%s\t%s\tP%d\t%s\t%s\n", issue.ID, issue.Type, issue.Priority, issue.Status, issue.Title)
+		_, _ = fmt.Fprintf(tableWriter, "%s\t%s\tP%d\t%s\t%s\n", issue.ID, issue.Type, issue.Priority, issue.Status, issue.Title)
 	}
-	_ = writer.Flush()
+	_ = tableWriter.Flush()
 }
 
-func printIssueList(issues []model.Issue) {
+// printIssueList writes human-friendly issue lines with symbols and colors.
+func printIssueList(writer io.Writer, issues []model.Issue) {
 	if len(issues) == 0 {
-		fmt.Println("No issues found")
+		_, _ = fmt.Fprintln(writer, "No issues found")
 		return
 	}
 	for _, issue := range issues {
@@ -82,7 +83,7 @@ func printIssueList(issues []model.Issue) {
 		title := issue.Title
 		if issue.Status == "closed" {
 			line := fmt.Sprintf("%s %s [P%d] %s - %s", symbol, issue.ID, issue.Priority, typeLabel, title)
-			fmt.Println(ansiGray + line + ansiReset)
+			_, _ = fmt.Fprintln(writer, ansiGray+line+ansiReset)
 			continue
 		}
 		if issue.Type == "epic" {
@@ -90,10 +91,11 @@ func printIssueList(issues []model.Issue) {
 			title = colorizeEpic(title)
 		}
 
-		fmt.Printf("%s %s %s %s - %s\n", symbol, issue.ID, priority, typeLabel, title)
+		_, _ = fmt.Fprintf(writer, "%s %s %s %s - %s\n", symbol, issue.ID, priority, typeLabel, title)
 	}
 }
 
+// statusSymbol maps issue status values to list glyphs.
 func statusSymbol(status string) string {
 	switch status {
 	case "open":
@@ -107,10 +109,12 @@ func statusSymbol(status string) string {
 	}
 }
 
+// colorizeEpic applies epic-specific color styling for list output.
 func colorizeEpic(v string) string {
 	return ansiGreen + v + ansiReset
 }
 
+// colorizePriority applies a priority color gradient label.
 func colorizePriority(priority int) string {
 	label := fmt.Sprintf("[P%d]", priority)
 	switch priority {
@@ -125,6 +129,7 @@ func colorizePriority(priority int) string {
 	}
 }
 
+// parseIDs validates and normalizes one or more public issue IDs.
 func parseIDs(args []string) ([]string, error) {
 	ids := make([]string, 0, len(args))
 	for _, raw := range args {
@@ -137,10 +142,12 @@ func parseIDs(args []string) ([]string, error) {
 	return ids, nil
 }
 
+// defaultDescription trims user-provided description text.
 func defaultDescription(input string) string {
 	return strings.TrimSpace(input)
 }
 
+// fazPaths returns .faz directory and DB file paths for a project.
 func fazPaths(projectDir string) (string, string) {
 	fazDir := filepath.Join(projectDir, db.DirName)
 	return fazDir, filepath.Join(fazDir, db.DBFileName)

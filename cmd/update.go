@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -63,8 +62,8 @@ var updateCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Updated issue: %s\n", ids[0])
-		fmt.Printf("  Status: updated\n")
+		cmd.Printf("Updated issue: %s\n", ids[0])
+		cmd.Printf("  Status: updated\n")
 		return nil
 	},
 }
@@ -74,7 +73,7 @@ func init() {
 	updateCmd.Flags().StringVar(&updateDescription, "description", "", "Updated description")
 	updateCmd.Flags().StringVar(&updateType, "type", "", "Updated type")
 	updateCmd.Flags().IntVar(&updatePriority, "priority", 2, "Updated priority")
-	updateCmd.Flags().StringVar(&updateStatus, "status", "", "Updated status")
+	updateCmd.Flags().StringVar(&updateStatus, "status", "", "Updated status (open|closed). Use faz claim for in_progress")
 	updateCmd.Flags().StringVar(&updateParent, "parent", "", "Updated parent issue ID")
 	updateCmd.Flags().BoolVar(&clearParent, "clear-parent", false, "Remove parent link")
 	rootCmd.AddCommand(updateCmd)

@@ -11,7 +11,7 @@ No code changes without a claimed faz task.
 
 - Run `faz claim <id>` successfully before editing files, generating code, or applying patches.
 - Add meaningful and rich descriptions for the tasks so other agents will know what needs to be done by just reading the task.
-- Split tasks in actionable units instead of aggregating many logical steps in only one task.
+- Prefer to create many tasks in smaller actionable units instead of aggregating many steps in only one task.
 
 ## Required Lifecycle
 
@@ -40,9 +40,8 @@ Follow this lifecycle in order for every coding session.
 ## Non-Negotiable Constraints
 
 - Never claim epics.
-- Never batch faz creation commands in parallel.
-- Treat prototypes and small fixes the same as large changes. If code changes, track it in faz.
 - If another workflow skill is active, still run faz lifecycle in parallel.
+- Close epics after all children are closed and the epic is considered done.
 
 ## Command Set
 

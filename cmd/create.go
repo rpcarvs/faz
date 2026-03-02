@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"strings"
 
 	"faz/internal/model"
@@ -28,9 +27,9 @@ var createCmd = &cobra.Command{
 
 		description := defaultDescription(createDescription)
 		if description == "" {
-			fmt.Println("Warning: creating issue without description.")
-			fmt.Println("  Issues without descriptions lack context for future work.")
-			fmt.Println("  Consider adding --description \"Why this issue exists and what needs to be done\"")
+			cmd.Println("Warning: creating issue without description.")
+			cmd.Println("  Issues without descriptions lack context for future work.")
+			cmd.Println("  Consider adding --description \"Why this issue exists and what needs to be done\"")
 		}
 
 		var parentID *string
@@ -54,13 +53,13 @@ var createCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Created issue: %s\n", id)
-		fmt.Printf("  Title: %s\n", args[0])
-		fmt.Printf("  Type: %s\n", createType)
-		fmt.Printf("  Priority: P%d\n", createPriority)
-		fmt.Printf("  Status: open\n")
+		cmd.Printf("Created issue: %s\n", id)
+		cmd.Printf("  Title: %s\n", args[0])
+		cmd.Printf("  Type: %s\n", createType)
+		cmd.Printf("  Priority: P%d\n", createPriority)
+		cmd.Printf("  Status: open\n")
 		if parentID != nil {
-			fmt.Printf("  Parent: %s\n", *parentID)
+			cmd.Printf("  Parent: %s\n", *parentID)
 		}
 		return nil
 	},

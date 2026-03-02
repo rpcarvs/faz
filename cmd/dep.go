@@ -29,8 +29,8 @@ var depAddCmd = &cobra.Command{
 		if err := svc.AddDependency(ids[0], ids[1]); err != nil {
 			return err
 		}
-		fmt.Printf("Added dependency:\n")
-		fmt.Printf("  %s depends on %s\n", ids[0], ids[1])
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Added dependency:")
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s depends on %s\n", ids[0], ids[1])
 		return nil
 	},
 }
@@ -53,8 +53,8 @@ var depRemoveCmd = &cobra.Command{
 		if err := svc.RemoveDependency(ids[0], ids[1]); err != nil {
 			return err
 		}
-		fmt.Printf("Removed dependency:\n")
-		fmt.Printf("  %s no longer depends on %s\n", ids[0], ids[1])
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Removed dependency:")
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s no longer depends on %s\n", ids[0], ids[1])
 		return nil
 	},
 }
@@ -82,8 +82,8 @@ var depListCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Issues blocked by %s:\n", id[0])
-			printIssueTable(items)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Issues blocked by %s:\n", id[0])
+			printIssueTable(cmd.OutOrStdout(), items)
 			return nil
 		}
 
@@ -91,8 +91,8 @@ var depListCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Dependencies for %s:\n", id[0])
-		printIssueTable(items)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Dependencies for %s:\n", id[0])
+		printIssueTable(cmd.OutOrStdout(), items)
 		return nil
 	},
 }

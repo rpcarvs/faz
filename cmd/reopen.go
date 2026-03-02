@@ -1,10 +1,6 @@
 package cmd
 
-import (
-	"fmt"
-
-	"github.com/spf13/cobra"
-)
+import "github.com/spf13/cobra"
 
 var reopenCmd = &cobra.Command{
 	Use:   "reopen <id> [id...]",
@@ -26,8 +22,8 @@ var reopenCmd = &cobra.Command{
 			if err := svc.Reopen(id); err != nil {
 				return err
 			}
-			fmt.Printf("Reopened issue: %s\n", id)
-			fmt.Printf("  Status: open\n")
+			cmd.Printf("Reopened issue: %s\n", id)
+			cmd.Printf("  Status: open\n")
 		}
 
 		return nil

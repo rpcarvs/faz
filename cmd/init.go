@@ -35,24 +35,29 @@ var initCmd = &cobra.Command{
 		if err := db.Migrate(sqlDB); err != nil {
 			return err
 		}
+		if _, err := sqlDB.Exec(`PRAGMA journal_mode = WAL;`); err != nil {
+			return fmt.Errorf("enable wal mode: %w", err)
+		}
 
 		addedGitIgnore, err := ensureGitIgnoreEntry(projectDir, ".faz/")
 		if err != nil {
 			return err
 		}
 
-		fmt.Println("faz initialized")
-		fmt.Println("Directory:", fazDir)
-		fmt.Println("Database:", dbPath)
+		cmd.Println("faz initialized")
+		cmd.Println("Directory:", fazDir)
+		cmd.Println("Database:", dbPath)
+		cmd.Println("SQLite:", "WAL mode enabled")
 		if addedGitIgnore {
-			fmt.Println("Gitignore:", ".faz/ added")
+			cmd.Println("Gitignore:", ".faz/ added")
 		} else {
-			fmt.Println("Gitignore:", ".faz/ already present")
+			cmd.Println("Gitignore:", ".faz/ already present")
 		}
 		return nil
 	},
 }
 
+// ensureGitIgnoreEntry adds an ignore entry if it is not already present.
 func ensureGitIgnoreEntry(projectDir, entry string) (bool, error) {
 	gitIgnorePath := filepath.Join(projectDir, ".gitignore")
 	existing := make(map[string]struct{})

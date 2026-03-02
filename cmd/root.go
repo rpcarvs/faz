@@ -15,6 +15,7 @@ It stores tasks in a project-local SQLite database and keeps epics, tasks,
 and dependencies in a simple graph model without external integrations.`,
 }
 
+// Execute runs the root command and exits with non-zero on failure.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "Error:", err)

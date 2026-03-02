@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// newClaudeSkillCommand installs the bundled Claude skill package.
 func newClaudeSkillCommand() *cobra.Command {
 	var force bool
 
