@@ -24,6 +24,8 @@ faz onboard
 
 ```bash
 faz recap
+faz install codex-skill
+faz install claude-skill
 faz create "Checkout revamp" --type epic --priority 1 --description "Improve checkout"
 faz create "Address validation" --type task --priority 1 --parent faz-ab12 --description "Client and server checks"
 faz dep add faz-ab12.0 faz-ab12
@@ -36,6 +38,8 @@ faz close faz-ab12.0
 faz reopen faz-ab12.0
 faz info
 ```
+
+Use `--force` with installer commands to overwrite an existing skill install.
 
 ## Storage model
 
