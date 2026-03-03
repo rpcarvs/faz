@@ -30,6 +30,8 @@ faz create "Checkout revamp" --type epic --priority 1 --description "Improve che
 faz create "Address validation" --type task --priority 1 --parent faz-ab12 --description "Client and server checks"
 faz dep add faz-ab12.0 faz-ab12
 faz list --status open
+faz monitor -t 5
+faz monitor --all
 faz children faz-ab12
 faz ready
 faz show faz-ab12.0

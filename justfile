@@ -5,6 +5,10 @@ default:
 build:
     go build .
 
+# Install to GOPATH
+install:
+    go install .
+
 # Run tests
 test:
     go test . -v
