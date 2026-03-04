@@ -25,6 +25,7 @@ Follow this lifecycle in order for every coding session.
 2. Plan
 - Reuse relevant open tasks when possible.
 - If none exist, create one epic and child task(s).
+- Do batch epic and children creating together. This will fail as you need the epic id to define the children. Always create the epic first > get the id > and then create children.
 - Create tasks one command at a time.
 
 3. Execute

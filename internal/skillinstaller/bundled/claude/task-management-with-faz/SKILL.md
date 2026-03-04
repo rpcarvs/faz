@@ -22,6 +22,7 @@ NO CODE WITHOUT `faz claim` FIRST
 - Not one line. Not a "quick fix." Not "I'll register it after." Claim first, code second.
 - Add meaningful and rich descriptions for the tasks so other agents will know what needs to be done by just reading the task.
 - Prefer to create many tasks in smaller actionable units instead of aggregating many steps in only one task.
+- Do batch epic and children creating together. This will fail as you need the epic id to define the children. Always create the epic first > get the id > and then create children.
 
 ## Lifecycle: Orient -> Plan -> Execute -> Close
 

@@ -20,29 +20,6 @@ faz init
 faz onboard
 ```
 
-## Core commands
-
-```bash
-faz recap
-faz install codex-skill
-faz install claude-skill
-faz create "Checkout revamp" --type epic --priority 1 --description "Improve checkout"
-faz create "Address validation" --type task --priority 1 --parent faz-ab12 --description "Client and server checks"
-faz dep add faz-ab12.0 faz-ab12
-faz list --status open
-faz monitor -t 5
-faz monitor --all
-faz children faz-ab12
-faz ready
-faz show faz-ab12.0
-faz claim faz-ab12.0
-faz close faz-ab12.0
-faz reopen faz-ab12.0
-faz info
-```
-
-Use `--force` with installer commands to overwrite an existing skill install.
-
 ## Install skills
 
 `faz` ships built-in installer commands for the `task-management-with-faz` skill:
@@ -58,6 +35,23 @@ Behavior:
 - Prints the final installed path after success.
 - Fails if the destination already exists, unless `--force` is passed.
 
+## Install context
+
+`faz` also ships context installers for Codex and Claude global context files:
+
+```bash
+faz install codex-context
+faz install claude-context
+```
+
+Behavior:
+
+- Ensures the target context file exists.
+- Manages the block between `<!-- FAZ-TASK-MANAGEMENT:BEGIN -->` and `<!-- FAZ-TASK-MANAGEMENT:END -->`.
+- Toggles managed content: appends the block when missing, removes the block when present.
+- By default writes to global files (`~/.codex/AGENTS.md` and `~/.claude/CLAUDE.md`).
+- `--local` writes context files into the current project directory.
+
 ## Storage model
 
 `faz init` creates:
@@ -69,6 +63,29 @@ Main schema:
 
 - `issues`: lifecycle and hierarchy (`parent_id`)
 - `dependencies`: issue graph (`issue_id` depends on `depends_on_id`)
+
+## Core commands
+
+```bash
+faz recap
+faz install codex-skill
+faz install claude-skill
+faz install codex-context
+faz install claude-context
+faz create "Checkout revamp" --type epic --priority 1 --description "Improve checkout"
+faz create "Address validation" --type task --priority 1 --parent faz-ab12 --description "Client and server checks"
+faz dep add faz-ab12.0 faz-ab12
+faz list --status open
+faz monitor -t 5
+faz monitor --all
+faz children faz-ab12
+faz ready
+faz show faz-ab12.0
+faz claim faz-ab12.0
+faz close faz-ab12.0
+faz reopen faz-ab12.0
+faz info
+```
 
 ## Notes
 
