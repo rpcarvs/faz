@@ -96,6 +96,7 @@ func ensureGitIgnoreEntry(projectDir, entry string) (bool, error) {
 	return true, nil
 }
 
+// init wires command flags and registration.
 func init() {
 	rootCmd.AddCommand(initCmd)
 }

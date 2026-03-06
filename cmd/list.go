@@ -48,6 +48,7 @@ var listCmd = &cobra.Command{
 	},
 }
 
+// init wires command flags and registration.
 func init() {
 	listCmd.Flags().StringVar(&listType, "type", "", "Filter by issue type")
 	listCmd.Flags().StringVar(&listStatus, "status", "", "Filter by issue status")

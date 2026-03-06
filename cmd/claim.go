@@ -44,6 +44,7 @@ var claimCmd = &cobra.Command{
 	},
 }
 
+// init wires command flags and registration.
 func init() {
 	claimCmd.Flags().DurationVar(&claimTTL, "ttl", 10*time.Minute, "Claim lease duration (example: 10m, 30m, 1h)")
 	rootCmd.AddCommand(claimCmd)

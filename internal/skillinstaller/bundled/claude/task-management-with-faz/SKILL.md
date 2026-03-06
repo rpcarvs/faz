@@ -20,9 +20,7 @@ NO CODE WITHOUT `faz claim` FIRST
 ```
 
 - Not one line. Not a "quick fix." Not "I'll register it after." Claim first, code second.
-- Add meaningful and rich descriptions for the tasks so other agents will know what needs to be done by just reading the task.
-- Prefer to create many tasks in smaller actionable units instead of aggregating many steps in only one task.
-- Do batch epic and children creating together. This will fail as you need the epic id to define the children. Always create the epic first > get the id > and then create children.
+- Add meaningful and rich descriptions for the tasks so other agents will know precisely what needs to be done by just reading the task.
 
 ## Lifecycle: Orient -> Plan -> Execute -> Close
 
@@ -35,6 +33,19 @@ NO CODE WITHOUT `faz claim` FIRST
 
 If `faz claim` fails (already claimed), pick another ready task.
 
+## Mandatory Task Rules
+
+- Tasks MUST be atomic units! Do not aggregate a lot of work into a task. Remember, atomic tasks!
+- You first must created ALL the necessary epics and children before start working.
+- Set blockers ALWAYS! You must be explicity when a task is being blocked by another task. That is non-negotiable. Use `faz dep` to manage blockers.
+- After ALL this is done, communicate to the user and wait for approval.
+
+Example Case: User asks you ti develop a tool.
+ - Given the request, you see may create 1 epic with topic A. It requires 3 atomic tasks.
+ - Do not start coding yet. The plan may need another epic with topic B with 5 atomic tasks.
+ - After all tasks are created you now set the blockers / dependencies with `faz dep`.
+ - Now you ask user to approve the setup.
+
 ## Quick Reference
 
 Run `faz recap` for a full command overview.
@@ -46,6 +57,10 @@ Run `faz recap` for a full command overview.
 | Create task | `faz create "Title" --type task --priority 1 --parent <epic-id> --description "..."` |
 | See task details | `faz show <id>` |
 | List children | `faz children <epic-id>` |
+| Set A is blocked by B | `faz dep add <A> <B>` |
+| Remove the blocker | `faz dep remove <A> <B>` |
+| List task blockers | `faz dep list <A>` |
+| List what the task blocks | `faz dep list <B>` |
 | Claim before coding | `faz claim <id>` |
 | Mark done | `faz close <id>` |
 | Scope changed | `faz update <id> --description "..."` |

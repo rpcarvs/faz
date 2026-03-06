@@ -9,14 +9,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newCodexContextCommand installs or toggles the managed Codex context block.
+// newCodexContextCommand installs or updates the managed Codex context block.
 func newCodexContextCommand() *cobra.Command {
 	var local bool
 
 	cmd := &cobra.Command{
 		Use:   "codex-context",
-		Short: "Install or toggle the faz task block in Codex AGENTS.md",
-		Long: `Install or toggle the managed faz task-management block for Codex.
+		Short: "Install or update the faz task block in Codex AGENTS.md",
+		Long: `Install or update the managed faz task-management block for Codex.
 
 Default target: ~/.codex/AGENTS.md (or $CODEX_HOME/AGENTS.md).
 Use --local to target ./AGENTS.md in the current directory.`,

@@ -16,6 +16,9 @@ It is inspired by [Beads](https://github.com/steveyegge/beads).
 
 ```bash
 go install .
+# If `faz` is not found, add GOPATH/bin to PATH (Bash example):
+grep -q '$(go env GOPATH)/bin' ~/.bashrc || echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.bashrc
+source ~/.bashrc
 faz init
 faz onboard
 ```
@@ -48,7 +51,7 @@ Behavior:
 
 - Ensures the target context file exists.
 - Manages the block between `<!-- FAZ-TASK-MANAGEMENT:BEGIN -->` and `<!-- FAZ-TASK-MANAGEMENT:END -->`.
-- Toggles managed content: appends the block when missing, removes the block when present.
+- Upserts managed content: appends the block when missing, replaces it when present.
 - By default writes to global files (`~/.codex/AGENTS.md` and `~/.claude/CLAUDE.md`).
 - `--local` writes context files into the current project directory.
 

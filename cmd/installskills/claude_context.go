@@ -9,14 +9,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newClaudeContextCommand installs or toggles the managed Claude context block.
+// newClaudeContextCommand installs or updates the managed Claude context block.
 func newClaudeContextCommand() *cobra.Command {
 	var local bool
 
 	cmd := &cobra.Command{
 		Use:   "claude-context",
-		Short: "Install or toggle the faz task block in Claude CLAUDE.md",
-		Long: `Install or toggle the managed faz task-management block for Claude.
+		Short: "Install or update the faz task block in Claude CLAUDE.md",
+		Long: `Install or update the managed faz task-management block for Claude.
 
 Default target: ~/.claude/CLAUDE.md.
 Use --local to target ./CLAUDE.md in the current directory.`,

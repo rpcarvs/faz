@@ -65,6 +65,7 @@ var createCmd = &cobra.Command{
 	},
 }
 
+// init wires command flags and registration.
 func init() {
 	createCmd.Flags().StringVar(&createType, "type", "task", "Issue type (epic|task|bug|feature|chore|decision)")
 	createCmd.Flags().IntVar(&createPriority, "priority", 2, "Issue priority (0-3)")

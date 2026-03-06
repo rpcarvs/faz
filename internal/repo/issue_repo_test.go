@@ -128,6 +128,61 @@ func TestClaimIssueSetsInProgressAndPreventsSecondClaim(t *testing.T) {
 	}
 }
 
+func TestReadyIssuesIncludesExpiredInProgressClaims(t *testing.T) {
+	projectDir := t.TempDir()
+	dbPath, err := db.EnsureProjectFiles(projectDir)
+	if err != nil {
+		t.Fatalf("ensure project files: %v", err)
+	}
+
+	sqlDB, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer func() { _ = sqlDB.Close() }()
+
+	if err := db.Migrate(sqlDB); err != nil {
+		t.Fatalf("migrate db: %v", err)
+	}
+
+	repo := NewIssueRepo(sqlDB)
+	issueID, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-r111",
+		Title:    "Reclaimable task",
+		Type:     "task",
+		Priority: 1,
+		Status:   "open",
+	})
+	if err != nil {
+		t.Fatalf("create issue: %v", err)
+	}
+
+	if err := repo.ClaimIssue(issueID, 50*time.Millisecond); err != nil {
+		t.Fatalf("claim issue: %v", err)
+	}
+
+	time.Sleep(80 * time.Millisecond)
+
+	ready, err := repo.ReadyIssues()
+	if err != nil {
+		t.Fatalf("query ready: %v", err)
+	}
+
+	found := false
+	for _, issue := range ready {
+		if issue.ID == issueID {
+			found = true
+			if issue.Status != "in_progress" {
+				t.Fatalf("expected in_progress status to remain until reclaim, got %s", issue.Status)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected expired in_progress issue %q to be in ready list", issueID)
+	}
+}
+
 func TestCloseIssueClearsClaimFields(t *testing.T) {
 	projectDir := t.TempDir()
 	dbPath, err := db.EnsureProjectFiles(projectDir)

@@ -10,8 +10,7 @@ description: Enforce faz task tracking for all implementation work that creates 
 No code changes without a claimed faz task.
 
 - Run `faz claim <id>` successfully before editing files, generating code, or applying patches.
-- Add meaningful and rich descriptions for the tasks so other agents will know what needs to be done by just reading the task.
-- Prefer to create many tasks in smaller actionable units instead of aggregating many steps in only one task.
+- Add meaningful and rich descriptions for the tasks so other agents will know precisely what needs to be done by just reading the task.
 
 ## Required Lifecycle
 
@@ -25,7 +24,7 @@ Follow this lifecycle in order for every coding session.
 2. Plan
 - Reuse relevant open tasks when possible.
 - If none exist, create one epic and child task(s).
-- Do batch epic and children creating together. This will fail as you need the epic id to define the children. Always create the epic first > get the id > and then create children.
+- Do not batch epic and children creating together. This will fail as you need the epic id to define the children. Always create the epic first > get the id > and then create children.
 - Create tasks one command at a time.
 
 3. Execute
@@ -38,6 +37,19 @@ Follow this lifecycle in order for every coding session.
 - Run `faz close <id>` for completed non-epic work.
 - Confirm epic progress with `faz show <epic-id>`.
 - Close epics after all children are done. DO NOT end the sessions leaving open epics with no children.
+
+## Mandatory Task Rules
+
+- Tasks MUST be atomic units! Do not aggregate a lot of work into a task. Remember, atomic tasks!
+- You first must created ALL the necessary epics and children before start working.
+- Set blockers ALWAYS! You must be explicitly when a task is being blocked by another task. That is non-negotiable. Use `faz dep` to manage blockers.
+- After ALL this is done, communicate to the user and wait for approval.
+
+Example Case: User asks you ti develop a tool.
+ - Given the request, you see may create 1 epic with topic A. It requires 3 atomic tasks.
+ - Do not start coding yet. The plan may need another epic with topic B with 5 atomic tasks.
+ - After all tasks are created you now set the blockers / dependencies with `faz dep`.
+ - Now you ask user to approve the setup.
 
 ## Non-Negotiable Constraints
 
@@ -52,6 +64,10 @@ Follow this lifecycle in order for every coding session.
 - Create task: `faz create "Title" --type task --priority 1 --parent <epic-id> --description "..."`
 - Show issue: `faz show <id>`
 - List children: `faz children <epic-id>`
+- Set A is blocked by B: `faz dep add <A> <B>`
+- Remove the blocker: `faz dep remove <A> <B>`
+- List task blockers: `faz dep list <A>`
+- List what the task blocks: `faz dep list <B>`
 - Claim work: `faz claim <id>`
 - Update scope: `faz update <id> --description "..."`
 - Close work: `faz close <id>`

@@ -30,6 +30,7 @@ var closeCmd = &cobra.Command{
 	},
 }
 
+// init wires command flags and registration.
 func init() {
 	rootCmd.AddCommand(closeCmd)
 }

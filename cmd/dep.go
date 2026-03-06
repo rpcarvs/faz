@@ -59,7 +59,7 @@ var depRemoveCmd = &cobra.Command{
 	},
 }
 
-var depListDirection string
+var depListUp bool
 
 var depListCmd = &cobra.Command{
 	Use:   "list <id>",
@@ -77,7 +77,7 @@ var depListCmd = &cobra.Command{
 			return err
 		}
 
-		if depListDirection == "up" {
+		if depListUp {
 			items, err := svc.Dependents(id[0])
 			if err != nil {
 				return err
@@ -97,8 +97,9 @@ var depListCmd = &cobra.Command{
 	},
 }
 
+// init registers dependency commands and list flags.
 func init() {
-	depListCmd.Flags().StringVar(&depListDirection, "direction", "down", "Direction: down (dependencies) or up (dependents)")
+	depListCmd.Flags().BoolVar(&depListUp, "up", false, "List dependents (issues blocked by this issue)")
 	depCmd.AddCommand(depAddCmd)
 	depCmd.AddCommand(depRemoveCmd)
 	depCmd.AddCommand(depListCmd)

@@ -68,6 +68,7 @@ var updateCmd = &cobra.Command{
 	},
 }
 
+// init wires command flags and registration.
 func init() {
 	updateCmd.Flags().StringVar(&updateTitle, "title", "", "Updated title")
 	updateCmd.Flags().StringVar(&updateDescription, "description", "", "Updated description")

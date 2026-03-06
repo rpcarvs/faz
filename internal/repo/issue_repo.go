@@ -20,6 +20,11 @@ type IssueRepo struct {
 var ErrIssueAlreadyClaimed = errors.New("issue is already claimed")
 var ErrIssueTypeNotClaimable = errors.New("issue type is not claimable")
 
+const (
+	maxWriteAttempts = 8
+	baseWriteBackoff = 20 * time.Millisecond
+)
+
 const issueSelectColumns = `i.id, i.public_id, i.title, i.description, i.type, i.priority, i.status,
 	       i.claimed_at, i.claim_expires_at, i.parent_id, p.public_id, i.created_at, i.updated_at, i.closed_at`
 
@@ -39,9 +44,9 @@ func (r *IssueRepo) CreateIssue(issue model.Issue) (string, error) {
 		parentInternalID = &parentIssue.InternalID
 	}
 
-	_, err := r.db.Exec(
+	_, err := r.execWithRetry(
 		`INSERT INTO issues(public_id, title, description, type, priority, status, parent_id)
-		 VALUES(?, ?, ?, ?, ?, ?, ?)`,
+			 VALUES(?, ?, ?, ?, ?, ?, ?)`,
 		issue.ID,
 		issue.Title,
 		issue.Description,
@@ -237,7 +242,7 @@ func (r *IssueRepo) ListIssues(filter model.ListFilter) ([]model.Issue, error) {
 
 // DeleteIssue permanently removes an issue.
 func (r *IssueRepo) DeleteIssue(publicID string) error {
-	result, err := r.db.Exec(`DELETE FROM issues WHERE public_id = ?`, publicID)
+	result, err := r.execWithRetry(`DELETE FROM issues WHERE public_id = ?`, publicID)
 	if err != nil {
 		return fmt.Errorf("delete issue: %w", err)
 	}
@@ -291,7 +296,7 @@ func (r *IssueRepo) UpdateIssue(publicID string, fields map[string]any) error {
 	args = append(args, publicID)
 
 	query := fmt.Sprintf("UPDATE issues SET %s WHERE public_id = ?", strings.Join(setClauses, ", "))
-	result, err := r.db.Exec(query, args...)
+	result, err := r.execWithRetry(query, args...)
 	if err != nil {
 		return fmt.Errorf("update issue: %w", err)
 	}
@@ -309,9 +314,9 @@ func (r *IssueRepo) UpdateIssue(publicID string, fields map[string]any) error {
 
 // CloseIssue marks an issue as closed.
 func (r *IssueRepo) CloseIssue(publicID string) error {
-	result, err := r.db.Exec(
+	result, err := r.execWithRetry(
 		`UPDATE issues
-		 SET status = 'closed',
+			 SET status = 'closed',
 		     closed_at = CURRENT_TIMESTAMP,
 		     claimed_at = NULL,
 		     claim_expires_at = NULL
@@ -333,9 +338,9 @@ func (r *IssueRepo) CloseIssue(publicID string) error {
 
 // ReopenIssue marks an issue as open.
 func (r *IssueRepo) ReopenIssue(publicID string) error {
-	result, err := r.db.Exec(
+	result, err := r.execWithRetry(
 		`UPDATE issues
-		 SET status = 'open',
+			 SET status = 'open',
 		     closed_at = NULL,
 		     claimed_at = NULL,
 		     claim_expires_at = NULL
@@ -357,9 +362,9 @@ func (r *IssueRepo) ReopenIssue(publicID string) error {
 
 // AddDependency links issue with a blocker.
 func (r *IssueRepo) AddDependency(issueID, dependsOnID string) error {
-	result, err := r.db.Exec(
+	result, err := r.execWithRetry(
 		`INSERT INTO dependencies(issue_id, depends_on_id)
-		 SELECT child.id, blocker.id
+			 SELECT child.id, blocker.id
 		 FROM issues child, issues blocker
 		 WHERE child.public_id = ? AND blocker.public_id = ?`,
 		issueID,
@@ -380,9 +385,9 @@ func (r *IssueRepo) AddDependency(issueID, dependsOnID string) error {
 
 // RemoveDependency unlinks a blocker.
 func (r *IssueRepo) RemoveDependency(issueID, dependsOnID string) error {
-	result, err := r.db.Exec(
+	result, err := r.execWithRetry(
 		`DELETE FROM dependencies
-		 WHERE issue_id = (SELECT id FROM issues WHERE public_id = ?)
+			 WHERE issue_id = (SELECT id FROM issues WHERE public_id = ?)
 		   AND depends_on_id = (SELECT id FROM issues WHERE public_id = ?)`,
 		issueID,
 		dependsOnID,
@@ -406,7 +411,7 @@ func (r *IssueRepo) ReadyIssues() ([]model.Issue, error) {
 		SELECT %s
 		FROM issues i
 		LEFT JOIN issues p ON p.id = i.parent_id
-		WHERE i.status = 'open'
+		WHERE i.status IN ('open', 'in_progress')
 		  AND (i.claim_expires_at IS NULL OR i.claim_expires_at <= CURRENT_TIMESTAMP)
 		  AND i.type != 'epic'
 		  AND NOT EXISTS (
@@ -486,9 +491,9 @@ func scanIssues(rows *sql.Rows) ([]model.Issue, error) {
 // ClaimIssue atomically claims an issue by moving it to in_progress with a TTL.
 func (r *IssueRepo) ClaimIssue(publicID string, lease time.Duration) error {
 	modifier := fmt.Sprintf("+%d seconds", int(lease.Seconds()))
-	result, err := r.db.Exec(
+	result, err := r.execWithRetry(
 		`UPDATE issues
-		 SET status = 'in_progress',
+			 SET status = 'in_progress',
 		     claimed_at = CURRENT_TIMESTAMP,
 		     claim_expires_at = DATETIME(CURRENT_TIMESTAMP, ?)
 		 WHERE public_id = ?
@@ -527,4 +532,62 @@ func (r *IssueRepo) ClaimIssue(publicID string, lease time.Duration) error {
 		return ErrIssueAlreadyClaimed
 	}
 	return ErrIssueAlreadyClaimed
+}
+
+// execWithRetry retries transient sqlite busy/locked write errors.
+func (r *IssueRepo) execWithRetry(query string, args ...any) (sql.Result, error) {
+	var lastErr error
+	for attempt := 0; attempt < maxWriteAttempts; attempt++ {
+		result, err := r.db.Exec(query, args...)
+		if err == nil {
+			return result, nil
+		}
+		if !isRetryableWriteError(err) {
+			return nil, err
+		}
+		lastErr = err
+		time.Sleep(writeBackoff(attempt))
+	}
+	if lastErr != nil {
+		return nil, fmt.Errorf("sqlite write failed after %d attempts: %w", maxWriteAttempts, lastErr)
+	}
+	return nil, fmt.Errorf("sqlite write failed after %d attempts", maxWriteAttempts)
+}
+
+// isRetryableWriteError reports whether a write should retry.
+func isRetryableWriteError(err error) bool {
+	if err == nil {
+		return false
+	}
+	for current := err; current != nil; current = unwrap(current) {
+		text := strings.ToLower(current.Error())
+		if strings.Contains(text, "sqlite_busy") || strings.Contains(text, "database is locked") {
+			return true
+		}
+	}
+	return false
+}
+
+// writeBackoff computes bounded exponential delay between write retries.
+func writeBackoff(attempt int) time.Duration {
+	if attempt < 0 {
+		return baseWriteBackoff
+	}
+	multiplier := 1 << attempt
+	if multiplier > 16 {
+		multiplier = 16
+	}
+	return time.Duration(multiplier) * baseWriteBackoff
+}
+
+// unwrap returns the next wrapped error when available.
+func unwrap(err error) error {
+	type unwrapper interface {
+		Unwrap() error
+	}
+	w, ok := err.(unwrapper)
+	if !ok {
+		return nil
+	}
+	return w.Unwrap()
 }

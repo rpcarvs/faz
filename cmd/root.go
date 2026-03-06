@@ -23,6 +23,7 @@ func Execute() {
 	}
 }
 
+// init wires command flags and registration.
 func init() {
 	rootCmd.SilenceUsage = true
 }

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -13,6 +15,9 @@ import (
 const (
 	DirName    = ".faz"
 	DBFileName = "taskstore.db"
+
+	maxOpenAttempts = 8
+	baseOpenBackoff = 20 * time.Millisecond
 )
 
 var ErrNotInitialized = errors.New("faz project is not initialized")
@@ -29,23 +34,42 @@ func EnsureProjectFiles(projectDir string) (string, error) {
 
 // Open opens a SQLite database from the given path.
 func Open(dbPath string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		return nil, fmt.Errorf("open sqlite database: %w", err)
-	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	var lastRetryErr error
+	for attempt := 0; attempt < maxOpenAttempts; attempt++ {
+		db, err := sql.Open("sqlite", dbPath)
+		if err != nil {
+			return nil, fmt.Errorf("open sqlite database: %w", err)
+		}
+		db.SetMaxOpenConns(1)
+		db.SetMaxIdleConns(1)
 
-	if err := db.Ping(); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("ping sqlite database: %w", err)
-	}
-	if err := applyConnectionPragmas(db); err != nil {
-		_ = db.Close()
-		return nil, err
+		if err := db.Ping(); err != nil {
+			_ = db.Close()
+			wrapped := fmt.Errorf("ping sqlite database: %w", err)
+			if isRetryableOpenError(wrapped) {
+				lastRetryErr = wrapped
+				time.Sleep(openBackoff(attempt))
+				continue
+			}
+			return nil, wrapped
+		}
+		if err := applyConnectionPragmas(db); err != nil {
+			_ = db.Close()
+			if isRetryableOpenError(err) {
+				lastRetryErr = err
+				time.Sleep(openBackoff(attempt))
+				continue
+			}
+			return nil, err
+		}
+
+		return db, nil
 	}
 
-	return db, nil
+	if lastRetryErr != nil {
+		return nil, fmt.Errorf("open sqlite database failed after %d attempts: %w", maxOpenAttempts, lastRetryErr)
+	}
+	return nil, fmt.Errorf("open sqlite database failed after %d attempts", maxOpenAttempts)
 }
 
 // OpenProjectDB opens a project database and errors if init has not been run.
@@ -75,4 +99,42 @@ func applyConnectionPragmas(db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// isRetryableOpenError reports whether opening the DB should retry.
+func isRetryableOpenError(err error) bool {
+	if err == nil {
+		return false
+	}
+	for current := err; current != nil; current = unwrap(current) {
+		text := strings.ToLower(current.Error())
+		if strings.Contains(text, "sqlite_busy") || strings.Contains(text, "database is locked") {
+			return true
+		}
+	}
+	return false
+}
+
+// openBackoff computes bounded exponential delay between open retries.
+func openBackoff(attempt int) time.Duration {
+	if attempt < 0 {
+		return baseOpenBackoff
+	}
+	multiplier := 1 << attempt
+	if multiplier > 16 {
+		multiplier = 16
+	}
+	return time.Duration(multiplier) * baseOpenBackoff
+}
+
+// unwrap returns the next wrapped error when available.
+func unwrap(err error) error {
+	type unwrapper interface {
+		Unwrap() error
+	}
+	w, ok := err.(unwrapper)
+	if !ok {
+		return nil
+	}
+	return w.Unwrap()
 }

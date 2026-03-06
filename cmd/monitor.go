@@ -46,6 +46,7 @@ var monitorCmd = &cobra.Command{
 	},
 }
 
+// init wires command flags and registration.
 func init() {
 	monitorCmd.Flags().IntVarP(&monitorIntervalSeconds, "interval", "t", 5, "Refresh interval in seconds")
 	monitorCmd.Flags().BoolVar(&monitorAll, "all", false, "Include closed issues")

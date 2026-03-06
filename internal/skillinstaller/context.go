@@ -10,9 +10,8 @@ import (
 )
 
 const (
-	contextBlockBegin       = "<!-- FAZ-TASK-MANAGEMENT:BEGIN -->"
-	contextBlockEnd         = "<!-- FAZ-TASK-MANAGEMENT:END -->"
-	mandatoryContextHeading = "# MANDATORY Task Management"
+	contextBlockBegin = "<!-- FAZ-TASK-MANAGEMENT:BEGIN -->"
+	contextBlockEnd   = "<!-- FAZ-TASK-MANAGEMENT:END -->"
 )
 
 var managedContextBlockPattern = regexp.MustCompile(`(?s)` + regexp.QuoteMeta(contextBlockBegin) + `.*?` + regexp.QuoteMeta(contextBlockEnd))
@@ -21,6 +20,7 @@ const mandatoryContextBody = `# MANDATORY Task Management
 
 - Use the ` + "`task-management-with-faz`" + ` SKILL and the ` + "`faz`" + ` CLI for all task management, tracking, and status updates.
 - Remember to add a meaningful and rich descriptions for the tasks so other agents will know what needs to be done by just reading the task.
+- Unless the user instruct you otherwise, you must wait for the user approval after creating the tasks.
 - Instead of aggregating a lot of work in one task, prefer creating several task with concise short work.`
 
 // CodexContextPath resolves the global Codex AGENTS.md path.
@@ -45,7 +45,7 @@ func ClaudeContextPath() (string, error) {
 	return filepath.Join(home, ".claude", "CLAUDE.md"), nil
 }
 
-// InstallCodexContext installs or toggles the managed context block in Codex AGENTS.md.
+// InstallCodexContext installs or updates the managed context block in Codex AGENTS.md.
 func InstallCodexContext() (string, string, error) {
 	path, err := CodexContextPath()
 	if err != nil {
@@ -58,7 +58,7 @@ func InstallCodexContext() (string, string, error) {
 	return path, action, nil
 }
 
-// InstallClaudeContext installs or toggles the managed context block in Claude CLAUDE.md.
+// InstallClaudeContext installs or updates the managed context block in Claude CLAUDE.md.
 func InstallClaudeContext() (string, string, error) {
 	path, err := ClaudeContextPath()
 	if err != nil {
@@ -78,7 +78,7 @@ func InstallContextAtPath(path string) (string, error) {
 		return "", fmt.Errorf("read context file %s: %w", path, err)
 	}
 
-	updated, action := toggleContextBlock(string(existing))
+	updated, action := upsertContextBlock(string(existing))
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", fmt.Errorf("create context directory %s: %w", filepath.Dir(path), err)
 	}
@@ -88,18 +88,18 @@ func InstallContextAtPath(path string) (string, error) {
 	return action, nil
 }
 
-// toggleContextBlock removes managed block when heading exists, else appends it.
-func toggleContextBlock(content string) (string, string) {
-	if strings.Contains(content, mandatoryContextHeading) {
-		cleaned := managedContextBlockPattern.ReplaceAllString(content, "")
-		cleaned = strings.TrimRight(cleaned, "\n\t ")
-		if cleaned == "" {
-			return "", "removed"
+// upsertContextBlock keeps exactly one managed block with the latest text.
+func upsertContextBlock(content string) (string, string) {
+	block := contextBlockBegin + "\n" + mandatoryContextBody + "\n" + contextBlockEnd
+	if managedContextBlockPattern.MatchString(content) {
+		replaced := managedContextBlockPattern.ReplaceAllString(content, block)
+		replaced = strings.TrimRight(replaced, "\n\t ")
+		if replaced == "" {
+			return block + "\n", "updated"
 		}
-		return cleaned + "\n", "removed"
+		return replaced + "\n", "updated"
 	}
 
-	block := contextBlockBegin + "\n" + mandatoryContextBody + "\n" + contextBlockEnd
 	base := strings.TrimRight(content, "\n\t ")
 	if base == "" {
 		return block + "\n", "appended"
