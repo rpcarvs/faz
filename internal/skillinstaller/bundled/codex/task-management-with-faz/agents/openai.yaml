@@ -1,4 +1,4 @@
 interface:
   display_name: "Task Management with faz"
-  short_description: "Enforce faz tracking for all coding work."
+  short_description: "Enforce faz tracking for all work."
   default_prompt: "Use $task-management-with-faz to run faz onboarding, task planning, claim-before-code, and task closure for this coding session."

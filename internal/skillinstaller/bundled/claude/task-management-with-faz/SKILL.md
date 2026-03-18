@@ -1,25 +1,25 @@
 ---
 name: task-management-with-faz
-description: Use when starting implementation work, planning tasks, creating features, fixing bugs, or any coding session that produces or modifies code
+description: Use when starting work, research, analysis, planning tasks, creating features, fixing bugs, or any session that requires you to act
 ---
 
 # Task Management with faz
 
 ## Overview
 
-**No code without a tracked task. No task without faz.**
+**No work without a tracked task. No task without faz.**
 
-`faz` is the local CLI task tracker. Every coding session uses it. Other skills run their workflows, but faz runs in parallel with all of them. Skills tell you HOW to work. faz tracks WHAT you're working on. Both happen together, always.
+`faz` is the local CLI task tracker. Every session uses it. Other skills run their workflows, but faz runs in parallel with all of them. Skills tell you HOW to work. faz tracks WHAT you're working on. Both happen together, always.
 
 **Violating the letter of this rule is violating the spirit of this rule.**
 
 ## The Iron Law
 
 ```
-NO CODE WITHOUT `faz claim` FIRST
+NO WORK WITHOUT `faz claim` FIRST
 ```
 
-- Not one line. Not a "quick fix." Not "I'll register it after." Claim first, code second.
+- Not one line. Not a "quick fix." Not "I'll register it after." Claim first, work second.
 - Add meaningful and rich descriptions for the tasks so other agents will know precisely what needs to be done by just reading the task.
 
 ## Lifecycle: Orient -> Plan -> Execute -> Close
@@ -40,8 +40,8 @@ If `faz claim` fails (already claimed), pick another ready task.
 - Set blockers ALWAYS! You must be explicity when a task is being blocked by another task. That is non-negotiable. Use `faz dep` to manage blockers.
 - After ALL this is done, communicate to the user and wait for approval.
 
-Example Case: User asks you ti develop a tool.
- - Given the request, you see may create 1 epic with topic A. It requires 3 atomic tasks.
+Example Case: User asks you to develop a tool.
+ - Given the request, you may create 1 epic with topic A. It requires 3 atomic tasks.
  - Do not start coding yet. The plan may need another epic with topic B with 5 atomic tasks.
  - After all tasks are created you now set the blockers / dependencies with `faz dep`.
  - Now you ask user to approve the setup.
@@ -65,6 +65,18 @@ Run `faz recap` for a full command overview.
 | Mark done | `faz close <id>` |
 | Scope changed | `faz update <id> --description "..."` |
 | New requirement | Create new task under epic first, then code |
+
+## Execution Pattern
+
+Use this pattern whenever the user asks for work.
+
+1. State a short draft plan in chat.
+2. Run orientation commands.
+3. Reuse or create epic plus child tasks.
+4. Share selected task IDs.
+5. Claim a non-epic task.
+6. Execute the task.
+7. Close finished tasks and report final statuses.
 
 ## Integration with Other Skills
 

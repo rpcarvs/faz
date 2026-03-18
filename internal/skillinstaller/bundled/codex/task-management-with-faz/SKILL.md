@@ -1,15 +1,15 @@
 ---
 name: task-management-with-faz
-description: Enforce faz task tracking for all implementation work that creates or modifies code. Use when starting coding sessions, planning or executing features, fixing bugs, refactoring, or any workflow where code files may change.
+description: Enforce faz task tracking for all work. Use when starting sessions, planning or executing features, fixing bugs, refactoring, researching, analyzing, or any workflow where you need to work.
 ---
 
 # Task Management with faz
 
 ## Core Rule
 
-No code changes without a claimed faz task.
+No work without a claimed faz task.
 
-- Run `faz claim <id>` successfully before editing files, generating code, or applying patches.
+- Run `faz claim <id>` successfully before action.
 - Add meaningful and rich descriptions for the tasks so other agents will know precisely what needs to be done by just reading the task.
 
 ## Required Lifecycle
@@ -29,7 +29,7 @@ Follow this lifecycle in order for every coding session.
 
 3. Execute
 - Claim exactly one non-epic item before coding: task, bug, feature, chore, or decision.
-- If `faz claim` fails because already claimed, do not code on it. Pick another ready task.
+- If `faz claim` fails because already claimed, do not work on it. Pick another ready task.
 - Keep task details current with `faz update` when scope changes.
 - Add new requirements as new child tasks under the epic before coding that new scope.
 
@@ -76,19 +76,19 @@ Example Case: User asks you ti develop a tool.
 
 ## Execution Pattern for Codex
 
-Use this pattern whenever the user asks for code work.
+Use this pattern whenever the user asks for work.
 
 1. State a short draft plan in chat.
 2. Run orientation commands.
 3. Reuse or create epic plus child tasks.
 4. Share selected task IDs.
 5. Claim a non-epic task.
-6. Implement code changes.
+6. Execute the task.
 7. Close finished tasks and report final statuses.
 
 ## Subagent Requirement
 
-If spawning subagents that will edit code, include this skill text and assign each subagent a specific faz task ID. Subagents do not inherit local skills automatically.
+If spawning subagents that will also work, include this skill text and assign each subagent a specific faz task ID. Subagents do not inherit local skills automatically.
 
 ## Failure Protocol
 
