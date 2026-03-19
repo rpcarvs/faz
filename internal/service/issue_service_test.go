@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"faz/internal/db"
-	"faz/internal/model"
-	"faz/internal/repo"
+	"github.com/rpcarvs/faz/internal/db"
+	"github.com/rpcarvs/faz/internal/model"
+	"github.com/rpcarvs/faz/internal/repo"
 )
 
 func TestNormalizeIssueID(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"faz/internal/db"
-	"faz/internal/model"
+	"github.com/rpcarvs/faz/internal/db"
+	"github.com/rpcarvs/faz/internal/model"
 )
 
 func TestReadyIssuesRespectsOpenBlockers(t *testing.T) {
@@ -328,7 +328,7 @@ func TestNextChildIndexReusesDeletedGap(t *testing.T) {
 	}
 }
 
-func TestListIssuesOrdersByPublicID(t *testing.T) {
+func TestListIssuesOrdersByPublicIDNaturalChildOrder(t *testing.T) {
 	projectDir := t.TempDir()
 	dbPath, err := db.EnsureProjectFiles(projectDir)
 	if err != nil {
@@ -389,6 +389,26 @@ func TestListIssuesOrdersByPublicID(t *testing.T) {
 		t.Fatalf("create a child 1: %v", err)
 	}
 	if _, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-a111.10",
+		Title:    "A child ten",
+		Type:     "task",
+		Priority: 2,
+		Status:   "open",
+		ParentID: &parentA,
+	}); err != nil {
+		t.Fatalf("create a child 10: %v", err)
+	}
+	if _, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-a111.2",
+		Title:    "A child two",
+		Type:     "task",
+		Priority: 2,
+		Status:   "open",
+		ParentID: &parentA,
+	}); err != nil {
+		t.Fatalf("create a child 2: %v", err)
+	}
+	if _, err := repo.CreateIssue(model.Issue{
 		ID:       "faz-b111.0",
 		Title:    "B child",
 		Type:     "task",
@@ -412,6 +432,8 @@ func TestListIssuesOrdersByPublicID(t *testing.T) {
 		"faz-a111",
 		"faz-a111.0",
 		"faz-a111.1",
+		"faz-a111.2",
+		"faz-a111.10",
 		"faz-b111",
 		"faz-b111.0",
 	}

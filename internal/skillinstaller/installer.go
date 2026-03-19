@@ -23,7 +23,7 @@ func InstallCodexSkill(force bool) (string, error) {
 	}
 
 	files := map[string]string{
-		"SKILL.md":          "bundled/codex/task-management-with-faz/SKILL.md",
+		"SKILL.md":           "bundled/codex/task-management-with-faz/SKILL.md",
 		"agents/openai.yaml": "bundled/codex/task-management-with-faz/agents/openai.yaml",
 	}
 

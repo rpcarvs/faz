@@ -3,7 +3,7 @@ package cmd
 import (
 	"strings"
 
-	"faz/internal/model"
+	"github.com/rpcarvs/faz/internal/model"
 	"github.com/spf13/cobra"
 )
 

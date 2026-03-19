@@ -1,4 +1,4 @@
-module faz
+module github.com/rpcarvs/faz
 
 go 1.25.0
 

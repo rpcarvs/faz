@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"faz/internal/model"
-	"faz/internal/repo"
+	"github.com/rpcarvs/faz/internal/model"
+	"github.com/rpcarvs/faz/internal/repo"
 )
 
 var validTypes = map[string]struct{}{

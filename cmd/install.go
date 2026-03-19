@@ -1,6 +1,6 @@
 package cmd
 
-import "faz/cmd/installskills"
+import "github.com/rpcarvs/faz/cmd/installskills"
 
 // init wires command flags and registration.
 func init() {

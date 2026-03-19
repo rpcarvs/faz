@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"faz/internal/db"
+	"github.com/rpcarvs/faz/internal/db"
 	"github.com/spf13/cobra"
 )
 

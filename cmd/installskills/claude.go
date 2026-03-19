@@ -3,7 +3,7 @@ package installskills
 import (
 	"fmt"
 
-	"faz/internal/skillinstaller"
+	"github.com/rpcarvs/faz/internal/skillinstaller"
 	"github.com/spf13/cobra"
 )
 

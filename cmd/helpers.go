@@ -9,10 +9,10 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"faz/internal/db"
-	"faz/internal/model"
-	"faz/internal/repo"
-	"faz/internal/service"
+	"github.com/rpcarvs/faz/internal/db"
+	"github.com/rpcarvs/faz/internal/model"
+	"github.com/rpcarvs/faz/internal/repo"
+	"github.com/rpcarvs/faz/internal/service"
 )
 
 const (

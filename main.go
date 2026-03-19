@@ -1,6 +1,6 @@
 package main
 
-import "faz/cmd"
+import "github.com/rpcarvs/faz/cmd"
 
 // main executes the root CLI command tree.
 func main() {

@@ -15,6 +15,10 @@ It is inspired by [Beads](https://github.com/steveyegge/beads).
 ## Quick start
 
 ```bash
+# Install directly from GitHub:
+go install github.com/rpcarvs/faz@latest
+
+# Or clone the repo and install locally:
 go install .
 # If `faz` is not found, add GOPATH/bin to PATH (Bash example):
 grep -q '$(go env GOPATH)/bin' ~/.bashrc || echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.bashrc

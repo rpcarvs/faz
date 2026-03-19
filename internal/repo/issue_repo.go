@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"faz/internal/model"
+	"github.com/rpcarvs/faz/internal/model"
 )
 
 // IssueRepo handles issue persistence and graph queries.
@@ -229,7 +229,17 @@ func (r *IssueRepo) ListIssues(filter model.ListFilter) ([]model.Issue, error) {
 	if len(where) > 0 {
 		query = query + " WHERE " + strings.Join(where, " AND ")
 	}
-	query = query + " ORDER BY i.public_id ASC"
+	query = query + `
+		ORDER BY
+			CASE
+				WHEN INSTR(i.public_id, '.') = 0 THEN i.public_id
+				ELSE SUBSTR(i.public_id, 1, INSTR(i.public_id, '.') - 1)
+			END ASC,
+			CASE
+				WHEN INSTR(i.public_id, '.') = 0 THEN -1
+				ELSE CAST(SUBSTR(i.public_id, INSTR(i.public_id, '.') + 1) AS INTEGER)
+			END ASC,
+			i.public_id ASC`
 
 	rows, err := r.db.Query(query, args...)
 	if err != nil {

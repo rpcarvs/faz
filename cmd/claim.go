@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"faz/internal/repo"
+	"github.com/rpcarvs/faz/internal/repo"
 	"github.com/spf13/cobra"
 )
 
