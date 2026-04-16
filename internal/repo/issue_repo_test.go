@@ -441,3 +441,107 @@ func TestListIssuesOrdersByPublicIDNaturalChildOrder(t *testing.T) {
 		t.Fatalf("unexpected list ordering, got=%v want=%v", gotIDs, wantIDs)
 	}
 }
+
+func TestListIssuesOrdersEpicsByTitleSequence(t *testing.T) {
+	projectDir := t.TempDir()
+	dbPath, err := db.EnsureProjectFiles(projectDir)
+	if err != nil {
+		t.Fatalf("ensure project files: %v", err)
+	}
+
+	sqlDB, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer func() { _ = sqlDB.Close() }()
+
+	if err := db.Migrate(sqlDB); err != nil {
+		t.Fatalf("migrate db: %v", err)
+	}
+
+	repo := NewIssueRepo(sqlDB)
+
+	epicTwo, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-a111",
+		Title:    "E2: Second epic",
+		Type:     "epic",
+		Priority: 1,
+		Status:   "open",
+	})
+	if err != nil {
+		t.Fatalf("create epic two: %v", err)
+	}
+	epicTen, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-b111",
+		Title:    "E10: Tenth epic",
+		Type:     "epic",
+		Priority: 1,
+		Status:   "open",
+	})
+	if err != nil {
+		t.Fatalf("create epic ten: %v", err)
+	}
+	epicOne, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-z111",
+		Title:    "E1: First epic",
+		Type:     "epic",
+		Priority: 1,
+		Status:   "open",
+	})
+	if err != nil {
+		t.Fatalf("create epic one: %v", err)
+	}
+
+	if _, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-a111.0",
+		Title:    "Second epic child",
+		Type:     "task",
+		Priority: 2,
+		Status:   "open",
+		ParentID: &epicTwo,
+	}); err != nil {
+		t.Fatalf("create epic two child: %v", err)
+	}
+	if _, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-b111.0",
+		Title:    "Tenth epic child",
+		Type:     "task",
+		Priority: 2,
+		Status:   "open",
+		ParentID: &epicTen,
+	}); err != nil {
+		t.Fatalf("create epic ten child: %v", err)
+	}
+	if _, err := repo.CreateIssue(model.Issue{
+		ID:       "faz-z111.0",
+		Title:    "First epic child",
+		Type:     "task",
+		Priority: 2,
+		Status:   "open",
+		ParentID: &epicOne,
+	}); err != nil {
+		t.Fatalf("create epic one child: %v", err)
+	}
+
+	issues, err := repo.ListIssues(model.ListFilter{All: true})
+	if err != nil {
+		t.Fatalf("list issues: %v", err)
+	}
+
+	gotIDs := make([]string, 0, len(issues))
+	for _, issue := range issues {
+		gotIDs = append(gotIDs, issue.ID)
+	}
+
+	wantIDs := []string{
+		"faz-z111",
+		"faz-z111.0",
+		"faz-a111",
+		"faz-a111.0",
+		"faz-b111",
+		"faz-b111.0",
+	}
+	if !reflect.DeepEqual(gotIDs, wantIDs) {
+		t.Fatalf("unexpected epic sequence ordering, got=%v want=%v", gotIDs, wantIDs)
+	}
+}

@@ -202,7 +202,8 @@ func (r *IssueRepo) ListIssues(filter model.ListFilter) ([]model.Issue, error) {
 	query := `
 		SELECT ` + issueSelectColumns + `
 		FROM issues i
-		LEFT JOIN issues p ON p.id = i.parent_id`
+		LEFT JOIN issues p ON p.id = i.parent_id
+		LEFT JOIN issues root ON root.id = COALESCE(i.parent_id, i.id)`
 
 	where := make([]string, 0)
 	args := make([]any, 0)
@@ -231,6 +232,11 @@ func (r *IssueRepo) ListIssues(filter model.ListFilter) ([]model.Issue, error) {
 	}
 	query = query + `
 		ORDER BY
+			CASE
+				WHEN root.type = 'epic' AND root.title GLOB 'E[0-9]*:*'
+					THEN printf('0-%09d', CAST(SUBSTR(root.title, 2, INSTR(root.title, ':') - 2) AS INTEGER))
+				ELSE printf('1-%s', root.public_id)
+			END ASC,
 			CASE
 				WHEN INSTR(i.public_id, '.') = 0 THEN i.public_id
 				ELSE SUBSTR(i.public_id, 1, INSTR(i.public_id, '.') - 1)
