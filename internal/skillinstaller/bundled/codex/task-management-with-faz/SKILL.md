@@ -41,6 +41,7 @@ Follow this lifecycle in order for every coding session.
 ## Mandatory Task Rules
 
 - Tasks MUST be atomic units! Do not aggregate a lot of work into a task. Remember, atomic tasks!
+- Add rich descriptions to the atomic tasks so ANY other Coding Agent or Human will understand know what to do!
 - You first must created ALL the necessary epics and children before start working.
 - Set blockers ALWAYS! You must be explicitly when a task is being blocked by another task. That is non-negotiable. Use `faz dep` to manage blockers.
 - After ALL this is done, communicate to the user and wait for approval.
