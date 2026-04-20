@@ -18,6 +18,9 @@ It is inspired by [Beads](https://github.com/steveyegge/beads).
 # Install directly from GitHub:
 go install github.com/rpcarvs/faz@latest
 
+# Check the installed version:
+faz -v
+
 # Or clone the repo and install locally:
 go install .
 # If `faz` is not found, add GOPATH/bin to PATH (Bash example):
@@ -41,6 +44,16 @@ Behavior:
 - Installs the skill into the target agent skill directory.
 - Prints the final installed path after success.
 - Fails if the destination already exists, unless `--force` is passed.
+
+## Shell completion
+
+`faz` exposes shell completion through Cobra/Fang:
+
+```bash
+faz completion bash
+faz completion zsh
+faz completion fish
+```
 
 ## Install context
 
@@ -92,6 +105,7 @@ faz claim faz-ab12.0
 faz close faz-ab12.0
 faz reopen faz-ab12.0
 faz info
+faz -v
 ```
 
 ## Notes
