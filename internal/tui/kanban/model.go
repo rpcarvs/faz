@@ -10,14 +10,38 @@ import (
 	"github.com/rpcarvs/faz/internal/model"
 )
 
-const refreshInterval = 10 * time.Second
+const (
+	refreshInterval     = 10 * time.Second
+	minRenderableWidth  = 42
+	minRenderableHeight = 11
+	minModalWidth       = 24
+	headerLines         = 2
+	footerLines         = 1
+	columnHeaderLines   = 1
+	cardOuterHeight     = 7
+)
 
 type catalogLoadedMsg struct {
 	catalog Catalog
 	err     error
 }
 
+// detailsLoadedMsg carries dependency details for the currently inspected issue.
+type detailsLoadedMsg struct {
+	issueID string
+	details issueDetails
+	err     error
+}
+
 type refreshTickMsg time.Time
+
+// issueDetails holds dependency context for the kanban detail modal.
+type issueDetails struct {
+	Dependencies []model.Issue
+	Dependents   []model.Issue
+	Loading      bool
+	Err          error
+}
 
 // Model manages the read-only kanban TUI state.
 type Model struct {
@@ -38,7 +62,10 @@ type Model struct {
 	showPicker  bool
 	pickerIndex int
 
-	showDetails bool
+	showDetails      bool
+	inspectedIssueID string
+	inspectedIssue   model.Issue
+	details          map[string]issueDetails
 }
 
 // NewModel builds a new kanban TUI model.
@@ -55,9 +82,7 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.ready = true
+		m.applyWindowSize(msg.Width, msg.Height)
 		m.ensureSelection()
 		return m, nil
 
@@ -70,7 +95,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.scopeIndex >= len(m.catalog.Scopes) {
 			m.scopeIndex = 0
 		}
-		m.ensureSelection()
+		if m.showDetails {
+			m.syncSelectionToInspectedIssue()
+		} else {
+			m.ensureSelection()
+		}
+		return m, nil
+
+	case detailsLoadedMsg:
+		if m.details == nil {
+			m.details = make(map[string]issueDetails)
+		}
+		if msg.err != nil {
+			m.details[msg.issueID] = issueDetails{Err: msg.err}
+			return m, nil
+		}
+		m.details[msg.issueID] = msg.details
 		return m, nil
 
 	case refreshTickMsg:
@@ -79,9 +119,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.showDetails {
 			switch msg.String() {
-			case "enter", "esc":
+			case "enter", "esc", "q":
 				m.showDetails = false
-			case "q", "ctrl+c":
+				m.clearInspectedIssue()
+			case "left", "h":
+				return m, m.navigateDetailsCol(-1)
+			case "right", "l":
+				return m, m.navigateDetailsCol(1)
+			case "up", "k":
+				return m, m.navigateDetails(-1)
+			case "down", "j":
+				return m, m.navigateDetails(1)
+			case "ctrl+c":
 				return m, tea.Quit
 			}
 			return m, nil
@@ -119,8 +168,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.moveRow(1)
 			return m, nil
 		case "enter":
-			if m.currentIssue() != nil {
+			if issue := m.currentIssue(); issue != nil {
+				m.setInspectedIssue(*issue)
 				m.showDetails = true
+				return m, m.prepareDetailsForIssue(issue.ID)
 			}
 			return m, nil
 		case "r":
@@ -138,6 +189,9 @@ func (m Model) View() string {
 	}
 	if m.err != nil {
 		return fmt.Sprintf("Failed to load kanban: %v", m.err)
+	}
+	if m.isUndersized() {
+		return m.renderUndersized()
 	}
 
 	content := lipgloss.JoinVertical(
@@ -158,11 +212,11 @@ func (m Model) View() string {
 
 func (m Model) updatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q", "ctrl+c":
-		return m, tea.Quit
-	case "esc":
+	case "q", "esc":
 		m.showPicker = false
 		return m, nil
+	case "ctrl+c":
+		return m, tea.Quit
 	case "up", "k":
 		if m.pickerIndex > 0 {
 			m.pickerIndex--
@@ -190,6 +244,21 @@ func (m Model) updatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+// applyWindowSize records usable dimensions and ignores transient invalid resize events.
+func (m *Model) applyWindowSize(width, height int) {
+	if width <= 0 || height <= 0 {
+		return
+	}
+	m.width = width
+	m.height = height
+	m.ready = true
+}
+
+// isUndersized reports whether the current window is too small for the full board layout.
+func (m Model) isUndersized() bool {
+	return m.width < minRenderableWidth || m.height < minRenderableHeight
 }
 
 func (m *Model) cycleScope(step int) {
@@ -244,6 +313,58 @@ func (m *Model) moveRow(delta int) {
 	m.adjustScroll()
 }
 
+// navigateDetails moves within the current column and keeps the details modal open.
+func (m *Model) navigateDetails(delta int) tea.Cmd {
+	before := m.inspectedIssueRef()
+	if before == nil {
+		return nil
+	}
+	m.syncSelectionToInspectedIssue()
+	beforeID := before.ID
+	m.moveRow(delta)
+	after := m.currentIssue()
+	if after == nil || after.ID == beforeID {
+		return nil
+	}
+	m.setInspectedIssue(*after)
+	return m.prepareDetailsForIssue(after.ID)
+}
+
+// navigateDetailsCol moves to an adjacent modal column without cycling.
+func (m *Model) navigateDetailsCol(delta int) tea.Cmd {
+	before := m.inspectedIssueRef()
+	if before == nil {
+		return nil
+	}
+	m.syncSelectionToInspectedIssue()
+	nextCol := m.selectedCol + delta
+	if nextCol < 0 || nextCol > 2 {
+		return nil
+	}
+	columns := m.currentColumns()
+	switch nextCol {
+	case 0:
+		if len(columns.Todo) == 0 {
+			return nil
+		}
+	case 1:
+		if len(columns.Claimed) == 0 {
+			return nil
+		}
+	case 2:
+		if len(columns.Done) == 0 {
+			return nil
+		}
+	}
+	m.moveCol(delta)
+	after := m.currentIssue()
+	if after == nil || after.ID == before.ID {
+		return nil
+	}
+	m.setInspectedIssue(*after)
+	return m.prepareDetailsForIssue(after.ID)
+}
+
 func (m *Model) ensureSelection() {
 	column := m.currentColumn()
 	if len(column) == 0 {
@@ -278,15 +399,9 @@ func (m *Model) adjustScroll() {
 }
 
 func (m Model) visibleRows() int {
-	boardHeight := m.height - 9
-	if boardHeight < 8 {
-		return 1
-	}
-	cardHeight := 5
-	rowUnit := cardHeight + 1
-	rows := boardHeight / rowUnit
+	rows := (m.boardHeightBudget() - columnHeaderLines) / cardOuterHeight
 	if rows < 1 {
-		return 1
+		return 0
 	}
 	return rows
 }
@@ -324,11 +439,157 @@ func (m Model) currentIssue() *model.Issue {
 	return &issue
 }
 
+func (m Model) currentIssueDetails() issueDetails {
+	issue := m.inspectedIssueRef()
+	if issue == nil || m.details == nil {
+		return issueDetails{}
+	}
+	return m.details[issue.ID]
+}
+
+// inspectedIssueRef returns the issue currently shown in the details modal.
+func (m Model) inspectedIssueRef() *model.Issue {
+	if m.inspectedIssueID == "" {
+		return m.currentIssue()
+	}
+	if issue := m.findIssueByID(m.inspectedIssueID); issue != nil {
+		return issue
+	}
+	if m.inspectedIssue.ID == m.inspectedIssueID {
+		issue := m.inspectedIssue
+		return &issue
+	}
+	return nil
+}
+
+// inspectedColumnIndex reports the active modal column for the inspected issue.
+func (m Model) inspectedColumnIndex() int {
+	if col, _, ok := m.locateIssueInCurrentScope(m.inspectedIssueID); ok {
+		return col
+	}
+	issue := m.inspectedIssueRef()
+	if issue == nil {
+		return m.selectedCol
+	}
+	switch issue.Status {
+	case "in_progress":
+		return 1
+	case "closed":
+		return 2
+	default:
+		return 0
+	}
+}
+
+// inspectedColumnTitle returns the board column title for the inspected issue.
+func (m Model) inspectedColumnTitle() string {
+	switch m.inspectedColumnIndex() {
+	case 1:
+		return "CLAIMED"
+	case 2:
+		return "DONE"
+	default:
+		return "TO DO"
+	}
+}
+
+// locateIssueInCurrentScope returns the issue position in the currently visible board scope.
+func (m Model) locateIssueInCurrentScope(issueID string) (int, int, bool) {
+	if issueID == "" {
+		return 0, 0, false
+	}
+	columns := m.currentColumns()
+	if row, ok := findIssueIndex(columns.Todo, issueID); ok {
+		return 0, row, true
+	}
+	if row, ok := findIssueIndex(columns.Claimed, issueID); ok {
+		return 1, row, true
+	}
+	if row, ok := findIssueIndex(columns.Done, issueID); ok {
+		return 2, row, true
+	}
+	return 0, 0, false
+}
+
+// findIssueByID locates an issue across the current catalog snapshot.
+func (m Model) findIssueByID(issueID string) *model.Issue {
+	for _, columns := range m.catalog.Columns {
+		if issue := findIssueInColumn(columns.Todo, issueID); issue != nil {
+			return issue
+		}
+		if issue := findIssueInColumn(columns.Claimed, issueID); issue != nil {
+			return issue
+		}
+		if issue := findIssueInColumn(columns.Done, issueID); issue != nil {
+			return issue
+		}
+	}
+	return nil
+}
+
 func (m Model) loadCatalogCmd() tea.Cmd {
 	return func() tea.Msg {
 		catalog, err := LoadCatalog(m.svc)
 		return catalogLoadedMsg{catalog: catalog, err: err}
 	}
+}
+
+func (m Model) loadDetailsCmd(issueID string) tea.Cmd {
+	return func() tea.Msg {
+		dependencies, err := m.svc.Dependencies(issueID)
+		if err != nil {
+			return detailsLoadedMsg{issueID: issueID, err: err}
+		}
+		dependents, err := m.svc.Dependents(issueID)
+		if err != nil {
+			return detailsLoadedMsg{issueID: issueID, err: err}
+		}
+		return detailsLoadedMsg{
+			issueID: issueID,
+			details: issueDetails{
+				Dependencies: dependencies,
+				Dependents:   dependents,
+			},
+		}
+	}
+}
+
+// prepareDetailsForIssue ensures detail state exists and triggers loading when needed.
+func (m *Model) prepareDetailsForIssue(issueID string) tea.Cmd {
+	if m.details == nil {
+		m.details = make(map[string]issueDetails)
+	}
+	if details, ok := m.details[issueID]; ok {
+		if details.Loading || details.Err != nil || details.Dependencies != nil || details.Dependents != nil {
+			return nil
+		}
+	}
+	m.details[issueID] = issueDetails{Loading: true}
+	return m.loadDetailsCmd(issueID)
+}
+
+// setInspectedIssue anchors the open modal to one explicit issue.
+func (m *Model) setInspectedIssue(issue model.Issue) {
+	m.inspectedIssueID = issue.ID
+	m.inspectedIssue = issue
+}
+
+// clearInspectedIssue resets the explicit modal target.
+func (m *Model) clearInspectedIssue() {
+	m.inspectedIssueID = ""
+	m.inspectedIssue = model.Issue{}
+}
+
+// syncSelectionToInspectedIssue keeps board cursor state aligned with the modal target when possible.
+func (m *Model) syncSelectionToInspectedIssue() {
+	col, row, ok := m.locateIssueInCurrentScope(m.inspectedIssueID)
+	if !ok {
+		m.ensureSelection()
+		return
+	}
+	m.selectedCol = col
+	m.selectedRow = row
+	m.adjustScroll()
 }
 
 func tickCmd() tea.Cmd {
@@ -339,15 +600,16 @@ func tickCmd() tea.Cmd {
 
 func (m Model) renderHeader() string {
 	scope := m.currentScope()
+	contentWidth := maxInt(1, m.width-2)
 	headerStyle := lipgloss.NewStyle().
-		Width(m.width).
+		Width(maxInt(1, m.width)).
 		Padding(0, 1).
 		Bold(true).
 		Foreground(lipgloss.Color("230")).
 		Background(lipgloss.Color("24"))
 
 	subtitleStyle := lipgloss.NewStyle().
-		Width(m.width).
+		Width(maxInt(1, m.width)).
 		Padding(0, 1).
 		Foreground(lipgloss.Color("245"))
 
@@ -356,36 +618,34 @@ func (m Model) renderHeader() string {
 	subtitle := "Auto-refresh every 10s."
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		headerStyle.Render(fmt.Sprintf("%s  |  %s", title, scopeTitle)),
-		subtitleStyle.Render(subtitle),
+		headerStyle.Render(truncateLine(fmt.Sprintf("%s  |  %s", title, scopeTitle), contentWidth)),
+		subtitleStyle.Render(truncateLine(subtitle, contentWidth)),
 	)
 }
 
 func (m Model) renderBoard() string {
 	columns := m.currentColumns()
-	boardWidth := m.width
-	gap := 2
-	colWidth := (boardWidth - 2*gap) / 3
-	if colWidth < 18 {
-		colWidth = 18
+	if m.visibleRows() == 0 {
+		return m.renderCompactBoardNotice()
 	}
-
-	todo := m.renderColumn("TO DO", columns.Todo, 0, colWidth, lipgloss.Color("178"))
-	claimed := m.renderColumn("CLAIMED", columns.Claimed, 1, colWidth, lipgloss.Color("39"))
-	done := m.renderColumn("DONE", columns.Done, 2, colWidth, lipgloss.Color("71"))
+	widths, gap := boardColumnLayout(m.width)
+	todo := m.renderColumn("TO DO", columns.Todo, 0, widths[0], lipgloss.Color("178"))
+	claimed := m.renderColumn("CLAIMED", columns.Claimed, 1, widths[1], lipgloss.Color("39"))
+	done := m.renderColumn("DONE", columns.Done, 2, widths[2], lipgloss.Color("71"))
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top, todo, strings.Repeat(" ", gap), claimed, strings.Repeat(" ", gap), done)
 	return lipgloss.PlaceHorizontal(m.width, lipgloss.Center, row)
 }
 
 func (m Model) renderColumn(title string, issues []model.Issue, colIndex, width int, accent lipgloss.Color) string {
+	headerWidth := maxInt(1, width-2)
 	header := lipgloss.NewStyle().
-		Width(width).
+		Width(maxInt(1, width)).
 		Bold(true).
 		Padding(0, 1).
 		Foreground(lipgloss.Color("230")).
 		Background(accent).
-		Render(fmt.Sprintf("%s (%d)", title, len(issues)))
+		Render(truncateLine(fmt.Sprintf("%s (%d)", title, len(issues)), headerWidth))
 
 	rowsVisible := m.visibleRows()
 	start := 0
@@ -403,7 +663,7 @@ func (m Model) renderColumn(title string, issues []model.Issue, colIndex, width 
 	body := make([]string, 0, rowsVisible)
 	if len(issues) == 0 {
 		empty := lipgloss.NewStyle().
-			Width(maxInt(1, width-4)).
+			Width(maxInt(1, width-2)).
 			Height(5).
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("238")).
@@ -437,10 +697,10 @@ func (m Model) renderCard(issue model.Issue, selected bool, width int) string {
 			meta = fmt.Sprintf("%s • No Epic", meta)
 		}
 	}
-	title := fitLines(issue.Title, width-4, 2)
+	title := fitLines(issue.Title, maxInt(1, width-4), 2)
 
 	cardStyle := lipgloss.NewStyle().
-		Width(maxInt(1, width-4)).
+		Width(maxInt(1, width-2)).
 		Height(5).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
@@ -458,22 +718,46 @@ func (m Model) renderCard(issue model.Issue, selected bool, width int) string {
 		lipgloss.Left,
 		titleStyle.Render(title),
 		"",
-		metaStyle.Render(truncateLine(meta, width-4)),
+		metaStyle.Render(truncateLine(meta, maxInt(1, width-4))),
 	)
 	return lipgloss.PlaceHorizontal(width, lipgloss.Center, cardStyle.Render(content))
 }
 
 func (m Model) renderFooter() string {
 	footer := "Tab next epic • Shift+Tab previous • e epic list • a all • arrows move • Enter details • r refresh • q quit"
+	contentWidth := maxInt(1, m.width-2)
 	return lipgloss.NewStyle().
-		Width(m.width).
+		Width(maxInt(1, m.width)).
 		Padding(0, 1).
 		Foreground(lipgloss.Color("244")).
-		Render(truncateLine(footer, m.width-2))
+		Render(truncateLine(footer, contentWidth))
+}
+
+// renderUndersized shows a stable fallback instead of rendering a clipped board.
+func (m Model) renderUndersized() string {
+	lines := []string{
+		truncateLine("faz kanban", maxInt(1, m.width)),
+		truncateLine(fmt.Sprintf("Window too small (%dx%d)", m.width, m.height), maxInt(1, m.width)),
+		truncateLine(fmt.Sprintf("Need at least %dx%d", minRenderableWidth, minRenderableHeight), maxInt(1, m.width)),
+		truncateLine("Enlarge the terminal.", maxInt(1, m.width)),
+		truncateLine("q quit", maxInt(1, m.width)),
+	}
+	if len(lines) > m.height {
+		lines = lines[:m.height]
+	}
+	return strings.Join(lines, "\n")
+}
+
+// renderCompactBoardNotice keeps the view height-safe when cards cannot fit.
+func (m Model) renderCompactBoardNotice() string {
+	return lipgloss.NewStyle().
+		Width(maxInt(1, m.width)).
+		Foreground(lipgloss.Color("244")).
+		Render(truncateLine("Window height too small for kanban cards.", maxInt(1, m.width)))
 }
 
 func (m Model) renderPicker() string {
-	width := minInt(60, maxInt(40, m.width-10))
+	width := minInt(60, maxInt(minModalWidth, m.width-10))
 	lines := []string{"Select scope", ""}
 	for i, scope := range m.catalog.Scopes {
 		prefix := "  "
@@ -494,11 +778,18 @@ func (m Model) renderPicker() string {
 }
 
 func (m Model) renderDetails() string {
-	issue := m.currentIssue()
+	issue := m.inspectedIssueRef()
 	if issue == nil {
 		return ""
 	}
-	width := minInt(84, maxInt(54, m.width-12))
+	width := minInt(84, maxInt(minModalWidth, m.width-12))
+	details := m.currentIssueDetails()
+	columnLabel := lipgloss.NewStyle().
+		Padding(0, 2).
+		Bold(true).
+		Foreground(lipgloss.Color("230")).
+		Background(lipgloss.Color("60")).
+		Render(m.inspectedColumnTitle())
 	parentTitle := "None"
 	if issue.ParentID != nil {
 		parentTitle = m.catalog.EpicTitles[*issue.ParentID]
@@ -514,8 +805,21 @@ func (m Model) renderDetails() string {
 		"",
 		issue.Description,
 		"",
-		"Enter or Esc closes this view.",
 	}
+	switch {
+	case details.Loading:
+		lines = append(lines, "Loading dependencies...")
+	case details.Err != nil:
+		lines = append(lines, fmt.Sprintf("Failed to load dependencies: %v", details.Err))
+	default:
+		lines = append(lines, m.renderIssueLinks("Blocked by", details.Dependencies, width)...)
+		lines = append(lines, "")
+		lines = append(lines, m.renderIssueLinks("Blocks", details.Dependents, width)...)
+	}
+	lines = append(lines,
+		"",
+		"Enter or Esc closes this view.",
+	)
 	box := lipgloss.NewStyle().
 		Width(width).
 		Border(lipgloss.DoubleBorder()).
@@ -523,16 +827,77 @@ func (m Model) renderDetails() string {
 		Padding(1, 2).
 		Background(lipgloss.Color("235")).
 		Render(strings.Join(lines, "\n"))
-	return box
+	return lipgloss.JoinVertical(lipgloss.Center, columnLabel, "", box)
+}
+
+func findIssueInColumn(issues []model.Issue, issueID string) *model.Issue {
+	for _, issue := range issues {
+		if issue.ID == issueID {
+			found := issue
+			return &found
+		}
+	}
+	return nil
+}
+
+// findIssueIndex returns the row index for an issue within one kanban column.
+func findIssueIndex(issues []model.Issue, issueID string) (int, bool) {
+	for i, issue := range issues {
+		if issue.ID == issueID {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 func (m Model) overlay(base, modal string) string {
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
 }
 
+func (m Model) renderIssueLinks(title string, issues []model.Issue, width int) []string {
+	lines := []string{title + ":"}
+	if len(issues) == 0 {
+		return append(lines, "  None")
+	}
+	for _, issue := range issues {
+		lines = append(lines, "  - "+truncateLine(fmt.Sprintf("%s %s", issue.ID, issue.Title), width-8))
+	}
+	return lines
+}
+
+// boardHeightBudget returns the lines available for the board after header and footer.
+func (m Model) boardHeightBudget() int {
+	budget := m.height - headerLines - footerLines
+	if budget < columnHeaderLines {
+		return columnHeaderLines
+	}
+	return budget
+}
+
+func boardColumnLayout(totalWidth int) ([3]int, int) {
+	gap := 2
+	if totalWidth < 72 {
+		gap = 1
+	}
+	available := totalWidth - 2*gap
+	if available < 3 {
+		available = 3
+	}
+	base := available / 3
+	remainder := available % 3
+	widths := [3]int{base, base, base}
+	for i := 0; i < remainder; i++ {
+		widths[i]++
+	}
+	for i := range widths {
+		widths[i] = maxInt(1, widths[i])
+	}
+	return widths, gap
+}
+
 func fitLines(text string, width, maxLines int) string {
-	if width < 8 {
-		width = 8
+	if width < 1 {
+		width = 1
 	}
 	lines := lipgloss.NewStyle().Width(width).MaxWidth(width).Render(text)
 	parts := strings.Split(lines, "\n")

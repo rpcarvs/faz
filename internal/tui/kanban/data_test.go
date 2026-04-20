@@ -130,6 +130,8 @@ func TestBuildCatalogOrdersEpicScopesNewestFirstAfterDefaults(t *testing.T) {
 func TestBuildCatalogOrdersColumnTasksNewestFirst(t *testing.T) {
 	parentID := "proj-e111"
 	now := time.Now()
+	olderClosed := now.Add(-20 * time.Minute)
+	newerClosed := now.Add(-5 * time.Minute)
 
 	issues := []model.Issue{
 		{
@@ -176,6 +178,26 @@ func TestBuildCatalogOrdersColumnTasksNewestFirst(t *testing.T) {
 			CreatedAt: now.Add(-30 * time.Minute),
 			UpdatedAt: now,
 		},
+		{
+			ID:        parentID + ".4",
+			Title:     "Newer created but older closed task",
+			Type:      "task",
+			Status:    "closed",
+			ParentID:  &parentID,
+			CreatedAt: now.Add(-10 * time.Minute),
+			UpdatedAt: now,
+			ClosedAt:  &olderClosed,
+		},
+		{
+			ID:        parentID + ".5",
+			Title:     "Older created but newer closed task",
+			Type:      "task",
+			Status:    "closed",
+			ParentID:  &parentID,
+			CreatedAt: now.Add(-90 * time.Minute),
+			UpdatedAt: now,
+			ClosedAt:  &newerClosed,
+		},
 	}
 
 	catalog := buildCatalog(issues)
@@ -186,5 +208,8 @@ func TestBuildCatalogOrdersColumnTasksNewestFirst(t *testing.T) {
 	}
 	if len(epic.Claimed) != 2 || epic.Claimed[0].ID != parentID+".3" || epic.Claimed[1].ID != parentID+".2" {
 		t.Fatalf("expected claimed tasks newest first, got %#v", epic.Claimed)
+	}
+	if len(epic.Done) != 2 || epic.Done[0].ID != parentID+".5" || epic.Done[1].ID != parentID+".4" {
+		t.Fatalf("expected done tasks newest closed first, got %#v", epic.Done)
 	}
 }

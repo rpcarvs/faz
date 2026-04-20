@@ -16,6 +16,8 @@ const (
 // Service defines the read-only operations needed by the kanban TUI.
 type Service interface {
 	List(filter model.ListFilter) ([]model.Issue, error)
+	Dependencies(publicID string) ([]model.Issue, error)
+	Dependents(publicID string) ([]model.Issue, error)
 }
 
 // Scope identifies one kanban grouping target for the TUI.
@@ -130,7 +132,7 @@ func scopeColumnForStatus(status string) string {
 func sortColumnsNewestFirst(columns *scopeColumns) {
 	sortIssuesNewestFirst(columns.Todo)
 	sortIssuesNewestFirst(columns.Claimed)
-	sortIssuesNewestFirst(columns.Done)
+	sortClosedIssuesNewestFirst(columns.Done)
 }
 
 // sortIssuesNewestFirst orders issues by creation time descending with ID fallback.
@@ -140,5 +142,28 @@ func sortIssuesNewestFirst(issues []model.Issue) {
 			return issues[i].ID > issues[j].ID
 		}
 		return issues[i].CreatedAt.After(issues[j].CreatedAt)
+	})
+}
+
+// sortClosedIssuesNewestFirst orders closed issues by close time descending with fallback.
+func sortClosedIssuesNewestFirst(issues []model.Issue) {
+	sort.SliceStable(issues, func(i, j int) bool {
+		leftClosed := issues[i].ClosedAt
+		rightClosed := issues[j].ClosedAt
+		switch {
+		case leftClosed != nil && rightClosed != nil:
+			if leftClosed.Equal(*rightClosed) {
+				return issues[i].ID > issues[j].ID
+			}
+			return leftClosed.After(*rightClosed)
+		case leftClosed != nil:
+			return true
+		case rightClosed != nil:
+			return false
+		case issues[i].CreatedAt.Equal(issues[j].CreatedAt):
+			return issues[i].ID > issues[j].ID
+		default:
+			return issues[i].CreatedAt.After(issues[j].CreatedAt)
+		}
 	})
 }
