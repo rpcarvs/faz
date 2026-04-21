@@ -274,6 +274,33 @@ func TestApplyWindowSizeIgnoresTransientZeroDimensions(t *testing.T) {
 	}
 }
 
+func TestFooterLinesUsesFullHintsBeforeCondensing(t *testing.T) {
+	model := NewModel(stubService{})
+	lines, condensed := model.footerLines(72)
+	if condensed {
+		t.Fatalf("expected non-condensed footer at medium width, got %#v", lines)
+	}
+	if len(lines) != 2 {
+		t.Fatalf("expected wrapped two-line footer at medium width, got %d lines (%#v)", len(lines), lines)
+	}
+	joined := strings.Join(lines, " ")
+	if !strings.Contains(joined, "Shift+Tab previous") {
+		t.Fatalf("expected full hints in medium-width footer, got %q", joined)
+	}
+}
+
+func TestFooterLinesCondensesAtVeryNarrowWidth(t *testing.T) {
+	model := NewModel(stubService{})
+	lines, condensed := model.footerLines(24)
+	if !condensed {
+		t.Fatalf("expected condensed footer at narrow width, got %#v", lines)
+	}
+	joined := strings.Join(lines, " ")
+	if !strings.Contains(joined, "o") {
+		t.Fatalf("expected condensed footer to advertise help key, got %q", joined)
+	}
+}
+
 func TestUpdatePreservesLastValidSizeAcrossTransientZeroResize(t *testing.T) {
 	model := NewModel(stubService{})
 
@@ -343,6 +370,155 @@ func TestQClosesEpicPickerWithoutQuitting(t *testing.T) {
 	}
 	if cmd != nil {
 		t.Fatal("expected q in epic picker to avoid quitting the app")
+	}
+}
+
+func TestOOpensHelpAndQClosesHelpWithoutQuitting(t *testing.T) {
+	model := NewModel(stubService{})
+	model.ready = true
+	model.width = 80
+	model.height = 24
+	model.catalog = Catalog{Scopes: []Scope{{Key: scopeAll, Title: "All Epics"}}}
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("o")})
+	model = updated.(Model)
+	if !model.showHelp {
+		t.Fatal("expected o to open help modal")
+	}
+	if cmd != nil {
+		t.Fatal("expected no command when opening help modal")
+	}
+
+	updated, cmd = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	model = updated.(Model)
+	if model.showHelp {
+		t.Fatal("expected q to close help modal")
+	}
+	if cmd != nil {
+		t.Fatal("expected q in help modal to avoid quitting the app")
+	}
+}
+
+func TestDOpensEpicDetailsInEpicScopeAndQCloses(t *testing.T) {
+	now := time.Now()
+	parentID := "proj-e1"
+	catalog := buildCatalog([]model.Issue{
+		{
+			ID:          parentID,
+			Title:       "E1: Epic",
+			Type:        "epic",
+			Status:      "open",
+			Priority:    1,
+			Description: "Epic description text",
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		},
+		{
+			ID:        parentID + ".0",
+			Title:     "Epic task",
+			Type:      "task",
+			Status:    "open",
+			ParentID:  &parentID,
+			CreatedAt: now.Add(time.Minute),
+			UpdatedAt: now.Add(time.Minute),
+		},
+	})
+
+	kanbanModel := NewModel(stubService{})
+	kanbanModel.ready = true
+	kanbanModel.width = 100
+	kanbanModel.height = 30
+	kanbanModel.catalog = catalog
+	kanbanModel.scopeIndex = 2
+
+	updated, cmd := kanbanModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	kanbanModel = updated.(Model)
+	if !kanbanModel.showEpic {
+		t.Fatal("expected d to open epic details modal")
+	}
+	if cmd != nil {
+		t.Fatal("expected no command when opening epic details modal")
+	}
+
+	view := kanbanModel.renderEpicDetails()
+	if !strings.Contains(view, "E1: Epic") || !strings.Contains(view, "Epic description text") {
+		t.Fatalf("expected epic details content, got %s", view)
+	}
+	if strings.Contains(view, "Epic: ") {
+		t.Fatalf("expected epic modal without redundant Epic prefix, got %s", view)
+	}
+
+	updated, cmd = kanbanModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	kanbanModel = updated.(Model)
+	if kanbanModel.showEpic {
+		t.Fatal("expected q to close epic modal")
+	}
+	if cmd != nil {
+		t.Fatal("expected q in epic modal to avoid quitting the app")
+	}
+}
+
+func TestEpicDetailsInAllScopeUsesSelectedTaskParentEpic(t *testing.T) {
+	now := time.Now()
+	parentID := "proj-e1"
+	catalog := buildCatalog([]model.Issue{
+		{
+			ID:          parentID,
+			Title:       "E1: Epic",
+			Type:        "epic",
+			Status:      "open",
+			Priority:    1,
+			Description: "Epic from parent",
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		},
+		{
+			ID:        parentID + ".0",
+			Title:     "Task with parent",
+			Type:      "task",
+			Status:    "open",
+			ParentID:  &parentID,
+			CreatedAt: now.Add(time.Minute),
+			UpdatedAt: now.Add(time.Minute),
+		},
+	})
+
+	kanbanModel := NewModel(stubService{})
+	kanbanModel.ready = true
+	kanbanModel.width = 100
+	kanbanModel.height = 30
+	kanbanModel.catalog = catalog
+	kanbanModel.scopeIndex = 0
+
+	view := kanbanModel.renderEpicDetails()
+	if !strings.Contains(view, "Epic from parent") {
+		t.Fatalf("expected parent epic details from all scope selection, got %s", view)
+	}
+}
+
+func TestEpicDetailsInNoEpicScopeShowsGracefulMessage(t *testing.T) {
+	now := time.Now()
+	catalog := buildCatalog([]model.Issue{
+		{
+			ID:        "proj-r001",
+			Title:     "Root task",
+			Type:      "task",
+			Status:    "open",
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	})
+
+	kanbanModel := NewModel(stubService{})
+	kanbanModel.ready = true
+	kanbanModel.width = 100
+	kanbanModel.height = 30
+	kanbanModel.catalog = catalog
+	kanbanModel.scopeIndex = 1
+
+	view := kanbanModel.renderEpicDetails()
+	if !strings.Contains(view, "No epic is associated with this scope.") {
+		t.Fatalf("expected graceful no-epic message, got %s", view)
 	}
 }
 

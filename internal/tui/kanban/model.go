@@ -16,9 +16,9 @@ const (
 	minRenderableHeight = 11
 	minModalWidth       = 24
 	headerLines         = 2
-	footerLines         = 1
 	columnHeaderLines   = 1
 	cardOuterHeight     = 7
+	footerGap           = " • "
 )
 
 type catalogLoadedMsg struct {
@@ -61,6 +61,8 @@ type Model struct {
 
 	showPicker  bool
 	pickerIndex int
+	showHelp    bool
+	showEpic    bool
 
 	showDetails      bool
 	inspectedIssueID string
@@ -135,8 +137,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.showEpic {
+			switch msg.String() {
+			case "enter", "esc", "q":
+				m.showEpic = false
+			case "ctrl+c":
+				return m, tea.Quit
+			}
+			return m, nil
+		}
 		if m.showPicker {
 			return m.updatePicker(msg)
+		}
+		if m.showHelp {
+			return m.updateHelp(msg)
 		}
 
 		switch msg.String() {
@@ -154,6 +168,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "e":
 			m.showPicker = true
 			m.pickerIndex = m.scopeIndex
+			return m, nil
+		case "o":
+			m.showHelp = true
+			return m, nil
+		case "d":
+			m.showEpic = true
 			return m, nil
 		case "left", "h":
 			m.moveCol(-1)
@@ -204,6 +224,12 @@ func (m Model) View() string {
 	if m.showPicker {
 		return m.overlay(content, m.renderPicker())
 	}
+	if m.showHelp {
+		return m.overlay(content, m.renderHelp())
+	}
+	if m.showEpic {
+		return m.overlay(content, m.renderEpicDetails())
+	}
 	if m.showDetails {
 		return m.overlay(content, m.renderDetails())
 	}
@@ -242,6 +268,17 @@ func (m Model) updatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "tab":
 		m.pickerIndex = (m.pickerIndex + 1) % len(m.catalog.Scopes)
 		return m, nil
+	}
+	return m, nil
+}
+
+func (m Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "esc", "enter", "o":
+		m.showHelp = false
+		return m, nil
+	case "ctrl+c":
+		return m, tea.Quit
 	}
 	return m, nil
 }
@@ -724,13 +761,17 @@ func (m Model) renderCard(issue model.Issue, selected bool, width int) string {
 }
 
 func (m Model) renderFooter() string {
-	footer := "Tab next epic • Shift+Tab previous • e epic list • a all • arrows move • Enter details • r refresh • q quit"
 	contentWidth := maxInt(1, m.width-2)
+	lines, _ := m.footerLines(contentWidth)
+	rendered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		rendered = append(rendered, truncateLine(line, contentWidth))
+	}
 	return lipgloss.NewStyle().
 		Width(maxInt(1, m.width)).
 		Padding(0, 1).
 		Foreground(lipgloss.Color("244")).
-		Render(truncateLine(footer, contentWidth))
+		Render(strings.Join(rendered, "\n"))
 }
 
 // renderUndersized shows a stable fallback instead of rendering a clipped board.
@@ -767,6 +808,45 @@ func (m Model) renderPicker() string {
 		lines = append(lines, prefix+scope.Title)
 	}
 	lines = append(lines, "", "Enter select • Esc close • a all")
+	box := lipgloss.NewStyle().
+		Width(width).
+		Border(lipgloss.DoubleBorder()).
+		BorderForeground(lipgloss.Color("69")).
+		Padding(1, 2).
+		Background(lipgloss.Color("235")).
+		Render(strings.Join(lines, "\n"))
+	return box
+}
+
+func (m Model) renderHelp() string {
+	width := minInt(72, maxInt(minModalWidth, m.width-10))
+	lines := []string{
+		"Keybindings",
+		"",
+		"Board:",
+		"  Tab / Shift+Tab  cycle epic scope",
+		"  e                open epic list",
+		"  a                all epics view",
+		"  d                epic details",
+		"  arrows / h j k l move selection",
+		"  Enter            open task details",
+		"  r                refresh now",
+		"  o                keybinding help",
+		"  q                quit",
+		"",
+		"Task details modal:",
+		"  up/down          move within current column",
+		"  left/right       move to adjacent column",
+		"  Enter / Esc / q  close details",
+		"",
+		"Epic picker:",
+		"  up/down          move",
+		"  Enter            select",
+		"  a                all epics view",
+		"  Esc / q          close picker",
+		"",
+		"Enter, Esc, q, or o closes this view.",
+	}
 	box := lipgloss.NewStyle().
 		Width(width).
 		Border(lipgloss.DoubleBorder()).
@@ -830,6 +910,69 @@ func (m Model) renderDetails() string {
 	return lipgloss.JoinVertical(lipgloss.Center, columnLabel, "", box)
 }
 
+func (m Model) renderEpicDetails() string {
+	width := minInt(84, maxInt(minModalWidth, m.width-12))
+	epic, reason := m.resolveInspectedEpic()
+	lines := []string{"Epic Details", ""}
+	if epic == nil {
+		lines = append(lines,
+			reason,
+			"",
+			"Tip: select an epic scope with Tab or e,",
+			"or highlight a task linked to an epic in All Epics.",
+		)
+	} else {
+		lines = append(lines,
+			epic.Title,
+			"",
+			fmt.Sprintf("ID: %s", epic.ID),
+			fmt.Sprintf("Type: %s", epic.Type),
+			fmt.Sprintf("Priority: P%d", epic.Priority),
+			fmt.Sprintf("Status: %s", epic.Status),
+			"",
+			epic.Description,
+		)
+	}
+	lines = append(lines, "", "Enter or Esc closes this view.")
+	box := lipgloss.NewStyle().
+		Width(width).
+		Border(lipgloss.DoubleBorder()).
+		BorderForeground(lipgloss.Color("33")).
+		Padding(1, 2).
+		Background(lipgloss.Color("24")).
+		Foreground(lipgloss.Color("230")).
+		Render(strings.Join(lines, "\n"))
+	return box
+}
+
+// resolveInspectedEpic chooses which epic to render from the current board context.
+func (m Model) resolveInspectedEpic() (*model.Issue, string) {
+	scope := m.currentScope()
+	switch scope.Key {
+	case scopeNoEpic:
+		return nil, "No epic is associated with this scope."
+	case scopeAll:
+		issue := m.currentIssue()
+		if issue == nil {
+			return nil, "No task is selected."
+		}
+		if issue.ParentID == nil {
+			return nil, "Selected task is not linked to an epic."
+		}
+		epic, ok := m.catalog.Epics[*issue.ParentID]
+		if !ok {
+			return nil, "Epic details are unavailable for the selected task."
+		}
+		return &epic, ""
+	default:
+		epic, ok := m.catalog.Epics[scope.Key]
+		if !ok {
+			return nil, "Selected scope does not map to a known epic."
+		}
+		return &epic, ""
+	}
+}
+
 func findIssueInColumn(issues []model.Issue, issueID string) *model.Issue {
 	for _, issue := range issues {
 		if issue.ID == issueID {
@@ -867,11 +1010,21 @@ func (m Model) renderIssueLinks(title string, issues []model.Issue, width int) [
 
 // boardHeightBudget returns the lines available for the board after header and footer.
 func (m Model) boardHeightBudget() int {
-	budget := m.height - headerLines - footerLines
+	budget := m.height - headerLines - m.footerLineCount()
 	if budget < columnHeaderLines {
 		return columnHeaderLines
 	}
 	return budget
+}
+
+// footerLineCount returns how many terminal rows the footer currently needs.
+func (m Model) footerLineCount() int {
+	contentWidth := maxInt(1, m.width-2)
+	lines, _ := m.footerLines(contentWidth)
+	if len(lines) < 1 {
+		return 1
+	}
+	return len(lines)
 }
 
 func boardColumnLayout(totalWidth int) ([3]int, int) {
@@ -893,6 +1046,75 @@ func boardColumnLayout(totalWidth int) ([3]int, int) {
 		widths[i] = maxInt(1, widths[i])
 	}
 	return widths, gap
+}
+
+// footerLines builds a responsive footer and reports whether condensed mode is active.
+func (m Model) footerLines(width int) ([]string, bool) {
+	fullItems := []string{
+		"Tab next epic",
+		"Shift+Tab previous",
+		"e epic list",
+		"a all",
+		"d epic details",
+		"arrows move",
+		"Enter details",
+		"r refresh",
+		"q quit",
+	}
+	full, ok := wrapFooterItems(fullItems, width, 2)
+	if ok {
+		return full, false
+	}
+	condensedItems := []string{
+		"Tab",
+		"e",
+		"a",
+		"d",
+		"arrows",
+		"Enter " + string(rune(0x23CE)),
+		"q",
+		"o all keys",
+	}
+	condensed, ok := wrapFooterItems(condensedItems, width, 2)
+	if ok {
+		return condensed, true
+	}
+	// At extreme widths keep core controls visible in one safe line.
+	return []string{truncateLine("Tab • e • a • q • o", width)}, true
+}
+
+// wrapFooterItems packs footer items into at most maxLines lines.
+func wrapFooterItems(items []string, width, maxLines int) ([]string, bool) {
+	if width < 1 || len(items) == 0 || maxLines < 1 {
+		return nil, false
+	}
+	lines := make([]string, 0, maxLines)
+	current := ""
+	for _, item := range items {
+		if lipgloss.Width(item) > width {
+			return nil, false
+		}
+		next := item
+		if current != "" {
+			next = current + footerGap + item
+		}
+		if lipgloss.Width(next) <= width {
+			current = next
+			continue
+		}
+		lines = append(lines, current)
+		if len(lines) >= maxLines {
+			return nil, false
+		}
+		current = item
+	}
+	if current != "" {
+		lines = append(lines, current)
+	}
+	if len(lines) > maxLines {
+		return nil, false
+	}
+	return lines, true
 }
 
 func fitLines(text string, width, maxLines int) string {

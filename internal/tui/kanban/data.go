@@ -38,6 +38,7 @@ type Catalog struct {
 	Scopes     []Scope
 	Columns    map[string]scopeColumns
 	EpicTitles map[string]string
+	Epics      map[string]model.Issue
 }
 
 // LoadCatalog fetches all issues and groups them into kanban scopes.
@@ -61,6 +62,7 @@ func buildCatalog(issues []model.Issue) Catalog {
 			scopeNoEpic: {},
 		},
 		EpicTitles: make(map[string]string),
+		Epics:      make(map[string]model.Issue),
 	}
 
 	epicScopes := make([]Scope, 0)
@@ -75,6 +77,7 @@ func buildCatalog(issues []model.Issue) Catalog {
 		})
 		catalog.Columns[issue.ID] = scopeColumns{}
 		catalog.EpicTitles[issue.ID] = issue.Title
+		catalog.Epics[issue.ID] = issue
 	}
 	sort.Slice(epicScopes, func(i, j int) bool {
 		return epicScopes[i].CreatedAt.After(epicScopes[j].CreatedAt)
