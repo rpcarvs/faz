@@ -21,7 +21,8 @@ const mandatoryContextBody = `# MANDATORY Task Management
 - Use the ` + "`task-management-with-faz`" + ` SKILL and the ` + "`faz`" + ` CLI for all task management, tracking, and status updates.
 - Remember to add a meaningful and rich descriptions for the tasks so other agents will know what needs to be done by just reading the task.
 - Unless the user instruct you otherwise, you must wait for the user approval after creating the tasks.
-- Instead of aggregating a lot of work in one task, prefer creating several task with concise short work.`
+- Instead of aggregating a lot of work in one task, prefer creating several task with concise short work.
+- Type reminder: Classify each issue type: task, bug, feature, chore, decision.`
 
 // CodexContextPath resolves the global Codex AGENTS.md path.
 func CodexContextPath() (string, error) {

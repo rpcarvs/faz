@@ -52,6 +52,26 @@ Example Case: User asks you ti develop a tool.
  - After all tasks are created you now set the blockers / dependencies with `faz dep`.
  - Now you ask user to approve the setup.
 
+### Work classification
+
+It is critical to properly classify the type of work you are executing. `faz` support many types and you MUST use them:
+
+- task: A concrete unit of implementation work.
+- bug: A defect fix for incorrect behavior.
+- feature: New user-facing capability or product behavior.
+- chore: Maintenance work with no direct feature outcome.
+- decision: A recorded architectural or product choice.
+
+Examples:
+
+```bash
+faz create "Implement token cache" --type task --priority 2 --description "..."
+faz create "Fix login race" --type bug --priority 1 --description "..."
+faz create "Add export API" --type feature --priority 2 --description "..."
+faz create "Refactor parser" --type chore --priority 2 --description "..."
+faz create "Choose DB strategy" --type decision --priority 1 --description "..."
+```
+
 ## Non-Negotiable Constraints
 
 - Never claim epics.
