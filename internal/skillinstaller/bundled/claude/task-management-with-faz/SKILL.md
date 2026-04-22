@@ -67,6 +67,10 @@ faz create "Refactor parser" --type chore --priority 2 --description "..."
 faz create "Choose DB strategy" --type decision --priority 1 --description "..."
 ```
 
+### Dynamic issue creations
+
+While implementing code and other works you may find bugs, stale code, missing documentation or other inconsistencies. Do not immediately and silently fix them. You must create a `faz` issue first as a `bug` or `chore` and notify about it when you finish your job. **That is critical** so these fixes do not happen silently.
+
 ## Quick Reference
 
 Run `faz recap` for a full command overview.

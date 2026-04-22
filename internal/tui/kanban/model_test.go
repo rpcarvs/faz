@@ -399,6 +399,127 @@ func TestOOpensHelpAndQClosesHelpWithoutQuitting(t *testing.T) {
 	}
 }
 
+func TestFOpensTypePickerWithDefaultAllSelection(t *testing.T) {
+	model := NewModel(stubService{})
+	model.ready = true
+	model.width = 80
+	model.height = 24
+	model.catalog = Catalog{Scopes: []Scope{{Key: scopeAll, Title: "All Epics"}}}
+	model.typeFilter = "feature"
+	model.typeIndex = 3
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
+	model = updated.(Model)
+	if !model.showType {
+		t.Fatal("expected f to open type picker")
+	}
+	if model.typeIndex != 0 {
+		t.Fatalf("expected f to reset picker to all, got index %d", model.typeIndex)
+	}
+	if cmd != nil {
+		t.Fatal("expected no command when opening type picker")
+	}
+}
+
+func TestTypePickerEnterAppliesTypeFilterToBoardColumns(t *testing.T) {
+	now := time.Now()
+	parentID := "proj-e1"
+	catalog := buildCatalog([]model.Issue{
+		{
+			ID:        parentID,
+			Title:     "E1: Epic",
+			Type:      "epic",
+			Status:    "open",
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:        parentID + ".0",
+			Title:     "Todo bug",
+			Type:      "bug",
+			Status:    "open",
+			ParentID:  &parentID,
+			CreatedAt: now.Add(1 * time.Minute),
+			UpdatedAt: now.Add(1 * time.Minute),
+		},
+		{
+			ID:        parentID + ".1",
+			Title:     "Todo feature",
+			Type:      "feature",
+			Status:    "open",
+			ParentID:  &parentID,
+			CreatedAt: now.Add(2 * time.Minute),
+			UpdatedAt: now.Add(2 * time.Minute),
+		},
+		{
+			ID:        parentID + ".2",
+			Title:     "Claimed bug",
+			Type:      "bug",
+			Status:    "in_progress",
+			ParentID:  &parentID,
+			CreatedAt: now.Add(3 * time.Minute),
+			UpdatedAt: now.Add(3 * time.Minute),
+		},
+		{
+			ID:        parentID + ".3",
+			Title:     "Done bug",
+			Type:      "bug",
+			Status:    "closed",
+			ParentID:  &parentID,
+			CreatedAt: now.Add(4 * time.Minute),
+			UpdatedAt: now.Add(4 * time.Minute),
+			ClosedAt:  ptrTime(now.Add(5 * time.Minute)),
+		},
+	})
+
+	model := NewModel(stubService{})
+	model.catalog = catalog
+	model.ready = true
+	model.width = 100
+	model.height = 30
+	model.scopeIndex = 0
+	model.showType = true
+	model.typeIndex = 2 // bug
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = updated.(Model)
+	if model.showType {
+		t.Fatal("expected enter to close type picker")
+	}
+	if model.typeFilter != "bug" {
+		t.Fatalf("expected selected type filter bug, got %q", model.typeFilter)
+	}
+	if cmd != nil {
+		t.Fatal("expected no command when selecting type filter")
+	}
+
+	columns := model.currentColumns()
+	if len(columns.Todo) != 1 || columns.Todo[0].Type != "bug" {
+		t.Fatalf("expected only bug todo items, got %#v", columns.Todo)
+	}
+	if len(columns.Claimed) != 1 || columns.Claimed[0].Type != "bug" {
+		t.Fatalf("expected only bug claimed items, got %#v", columns.Claimed)
+	}
+	if len(columns.Done) != 1 || columns.Done[0].Type != "bug" {
+		t.Fatalf("expected only bug done items, got %#v", columns.Done)
+	}
+}
+
+func TestQClosesTypePickerWithoutQuitting(t *testing.T) {
+	model := NewModel(stubService{})
+	model.ready = true
+	model.showType = true
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	model = updated.(Model)
+	if model.showType {
+		t.Fatal("expected q to close type picker")
+	}
+	if cmd != nil {
+		t.Fatal("expected q in type picker to avoid quitting the app")
+	}
+}
+
 func TestDOpensEpicDetailsInEpicScopeAndQCloses(t *testing.T) {
 	now := time.Now()
 	parentID := "proj-e1"

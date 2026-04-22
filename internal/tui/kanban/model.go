@@ -21,6 +21,8 @@ const (
 	footerGap           = " • "
 )
 
+var typeFilterOptions = []string{"all", "task", "bug", "feature", "chore", "decision"}
+
 type catalogLoadedMsg struct {
 	catalog Catalog
 	err     error
@@ -63,6 +65,9 @@ type Model struct {
 	pickerIndex int
 	showHelp    bool
 	showEpic    bool
+	showType    bool
+	typeIndex   int
+	typeFilter  string
 
 	showDetails      bool
 	inspectedIssueID string
@@ -72,7 +77,7 @@ type Model struct {
 
 // NewModel builds a new kanban TUI model.
 func NewModel(svc Service) Model {
-	return Model{svc: svc}
+	return Model{svc: svc, typeFilter: typeFilterOptions[0]}
 }
 
 // Init starts the first data load and background refresh loop.
@@ -146,6 +151,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.showType {
+			return m.updateTypePicker(msg)
+		}
 		if m.showPicker {
 			return m.updatePicker(msg)
 		}
@@ -174,6 +182,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "d":
 			m.showEpic = true
+			return m, nil
+		case "f":
+			m.showType = true
+			m.typeIndex = 0
 			return m, nil
 		case "left", "h":
 			m.moveCol(-1)
@@ -227,6 +239,9 @@ func (m Model) View() string {
 	if m.showHelp {
 		return m.overlay(content, m.renderHelp())
 	}
+	if m.showType {
+		return m.overlay(content, m.renderTypePicker())
+	}
 	if m.showEpic {
 		return m.overlay(content, m.renderEpicDetails())
 	}
@@ -279,6 +294,43 @@ func (m Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "ctrl+c":
 		return m, tea.Quit
+	}
+	return m, nil
+}
+
+func (m Model) updateTypePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "esc":
+		m.showType = false
+		return m, nil
+	case "ctrl+c":
+		return m, tea.Quit
+	case "up", "k":
+		if m.typeIndex > 0 {
+			m.typeIndex--
+		}
+		return m, nil
+	case "down", "j":
+		if m.typeIndex < len(typeFilterOptions)-1 {
+			m.typeIndex++
+		}
+		return m, nil
+	case "enter":
+		m.typeFilter = typeFilterOptions[m.typeIndex]
+		m.showType = false
+		m.selectedCol = 0
+		m.selectedRow = 0
+		m.scrollRow = 0
+		m.ensureSelection()
+		return m, nil
+	case "a":
+		m.typeFilter = typeFilterOptions[0]
+		m.showType = false
+		m.selectedCol = 0
+		m.selectedRow = 0
+		m.scrollRow = 0
+		m.ensureSelection()
+		return m, nil
 	}
 	return m, nil
 }
@@ -452,7 +504,19 @@ func (m Model) currentScope() Scope {
 
 func (m Model) currentColumns() scopeColumns {
 	scope := m.currentScope()
-	return m.catalog.Columns[scope.Key]
+	return m.applyTypeFilter(m.catalog.Columns[scope.Key])
+}
+
+func (m Model) applyTypeFilter(columns scopeColumns) scopeColumns {
+	selected := strings.TrimSpace(strings.ToLower(m.typeFilter))
+	if selected == "" || selected == typeFilterOptions[0] {
+		return columns
+	}
+	return scopeColumns{
+		Todo:    filterByType(columns.Todo, selected),
+		Claimed: filterByType(columns.Claimed, selected),
+		Done:    filterByType(columns.Done, selected),
+	}
 }
 
 func (m Model) currentColumn() []model.Issue {
@@ -652,7 +716,7 @@ func (m Model) renderHeader() string {
 
 	title := "faz kanban"
 	scopeTitle := "Epic: " + scope.Title
-	subtitle := "Auto-refresh every 10s."
+	subtitle := fmt.Sprintf("Auto-refresh every 10s. Type: %s.", strings.ToUpper(m.typeFilter))
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		headerStyle.Render(truncateLine(fmt.Sprintf("%s  |  %s", title, scopeTitle), contentWidth)),
@@ -827,6 +891,7 @@ func (m Model) renderHelp() string {
 		"  Tab / Shift+Tab  cycle epic scope",
 		"  e                open epic list",
 		"  a                all epics view",
+		"  f                issue type filter",
 		"  d                epic details",
 		"  arrows / h j k l move selection",
 		"  Enter            open task details",
@@ -847,6 +912,27 @@ func (m Model) renderHelp() string {
 		"",
 		"Enter, Esc, q, or o closes this view.",
 	}
+	box := lipgloss.NewStyle().
+		Width(width).
+		Border(lipgloss.DoubleBorder()).
+		BorderForeground(lipgloss.Color("69")).
+		Padding(1, 2).
+		Background(lipgloss.Color("235")).
+		Render(strings.Join(lines, "\n"))
+	return box
+}
+
+func (m Model) renderTypePicker() string {
+	width := minInt(44, maxInt(minModalWidth, m.width-10))
+	lines := []string{"Select issue type", ""}
+	for i, issueType := range typeFilterOptions {
+		prefix := "  "
+		if i == m.typeIndex {
+			prefix = "> "
+		}
+		lines = append(lines, prefix+strings.ToUpper(issueType))
+	}
+	lines = append(lines, "", "Enter select • Esc close • a all")
 	box := lipgloss.NewStyle().
 		Width(width).
 		Border(lipgloss.DoubleBorder()).
@@ -1055,6 +1141,7 @@ func (m Model) footerLines(width int) ([]string, bool) {
 		"Shift+Tab previous",
 		"e epic list",
 		"a all",
+		"f type filter",
 		"d epic details",
 		"arrows move",
 		"Enter details",
@@ -1069,6 +1156,7 @@ func (m Model) footerLines(width int) ([]string, bool) {
 		"Tab",
 		"e",
 		"a",
+		"f",
 		"d",
 		"arrows",
 		"Enter " + string(rune(0x23CE)),
@@ -1081,6 +1169,17 @@ func (m Model) footerLines(width int) ([]string, bool) {
 	}
 	// At extreme widths keep core controls visible in one safe line.
 	return []string{truncateLine("Tab • e • a • q • o", width)}, true
+}
+
+// filterByType keeps only issues matching one issue type.
+func filterByType(issues []model.Issue, selected string) []model.Issue {
+	filtered := make([]model.Issue, 0, len(issues))
+	for _, issue := range issues {
+		if strings.EqualFold(issue.Type, selected) {
+			filtered = append(filtered, issue)
+		}
+	}
+	return filtered
 }
 
 // wrapFooterItems packs footer items into at most maxLines lines.
