@@ -95,6 +95,21 @@ func printIssueList(writer io.Writer, issues []model.Issue) {
 	}
 }
 
+// printIssueReminder writes a compact issue summary for immediate execution context.
+func printIssueReminder(writer io.Writer, issue model.Issue) {
+	_, _ = fmt.Fprintf(writer, "  Title: %s\n", issue.Title)
+	_, _ = fmt.Fprintf(writer, "  Type: %s\n", issue.Type)
+	if issue.ParentID != nil {
+		_, _ = fmt.Fprintf(writer, "  Parent: %s\n", *issue.ParentID)
+	}
+	if description := strings.TrimSpace(issue.Description); description != "" {
+		_, _ = fmt.Fprintln(writer, "  Description:")
+		for _, line := range strings.Split(description, "\n") {
+			_, _ = fmt.Fprintf(writer, "    %s\n", line)
+		}
+	}
+}
+
 // statusSymbol maps issue status values to list glyphs.
 func statusSymbol(status string) string {
 	switch status {

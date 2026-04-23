@@ -14,6 +14,14 @@ It is inspired by [Beads](https://github.com/steveyegge/beads).
 
 ## Quick start
 
+### Homebrew
+
+```bash
+brew tap rpcarvs/faz
+brew install faz
+```
+
+### Go
 ```bash
 # Install directly from GitHub:
 go install github.com/rpcarvs/faz@latest

@@ -1,0 +1,34 @@
+class Faz < Formula
+  desc "Local task tracker for agent workflows"
+  homepage "https://github.com/rpcarvs/faz"
+  license "MIT"
+  version "__VERSION__"
+
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/rpcarvs/faz/releases/download/v__VERSION__/faz___VERSION___darwin_arm64.tar.gz"
+      sha256 "__DARWIN_ARM64_SHA256__"
+    else
+      url "https://github.com/rpcarvs/faz/releases/download/v__VERSION__/faz___VERSION___darwin_amd64.tar.gz"
+      sha256 "__DARWIN_AMD64_SHA256__"
+    end
+  end
+
+  on_linux do
+    if Hardware::CPU.arm?
+      url "https://github.com/rpcarvs/faz/releases/download/v__VERSION__/faz___VERSION___linux_arm64.tar.gz"
+      sha256 "__LINUX_ARM64_SHA256__"
+    else
+      url "https://github.com/rpcarvs/faz/releases/download/v__VERSION__/faz___VERSION___linux_amd64.tar.gz"
+      sha256 "__LINUX_AMD64_SHA256__"
+    end
+  end
+
+  def install
+    bin.install "faz"
+  end
+
+  test do
+    system "#{bin}/faz", "-v"
+  end
+end

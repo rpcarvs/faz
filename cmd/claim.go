@@ -37,9 +37,15 @@ var claimCmd = &cobra.Command{
 			return err
 		}
 
+		issue, err := svc.Get(ids[0])
+		if err != nil {
+			return err
+		}
+
 		cmd.Printf("Claimed issue: %s\n", ids[0])
 		cmd.Printf("  Status: in_progress\n")
 		cmd.Printf("  Lease TTL: %s\n", claimTTL)
+		printIssueReminder(cmd.OutOrStdout(), issue)
 		return nil
 	},
 }

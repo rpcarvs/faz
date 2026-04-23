@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Render Homebrew formula
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          version="${RELEASE_VERSION#v}"
+          ./scripts/render_homebrew_formula.sh \
+            "$version" \
+            "dist/checksums.txt" \
+            "packaging/homebrew/faz.rb.tmpl" \
+            "dist/faz.rb"
+
+      - name: Update Homebrew tap
+        env:
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          if [ -z "${HOMEBREW_TAP_GITHUB_TOKEN}" ]; then
+            echo "HOMEBREW_TAP_GITHUB_TOKEN is not set" >&2
+            exit 1
+          fi
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/rpcarvs/homebrew-faz.git" /tmp/homebrew-faz
+          mkdir -p /tmp/homebrew-faz/Formula
+          cp dist/faz.rb /tmp/homebrew-faz/Formula/faz.rb
+
+          cd /tmp/homebrew-faz
+          if [ -z "$(git status --porcelain Formula/faz.rb)" ]; then
+            echo "No Homebrew formula changes detected"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/faz.rb
+          git commit -m "Update faz formula for ${GITHUB_REF_NAME}"
+          git push origin HEAD

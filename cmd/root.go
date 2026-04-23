@@ -16,9 +16,14 @@ It stores tasks in a project-local SQLite database and keeps epics, tasks,
 and dependencies in a simple graph model without external integrations.`,
 }
 
-// Execute runs the root command and exits with non-zero on failure.
-func Execute() {
-	if err := fang.Execute(context.Background(), rootCmd, fang.WithoutManpage()); err != nil {
+// Execute runs the root command with the provided version string.
+func Execute(version string) {
+	options := []fang.Option{fang.WithoutManpage()}
+	if version != "" {
+		options = append(options, fang.WithVersion(version))
+	}
+
+	if err := fang.Execute(context.Background(), rootCmd, options...); err != nil {
 		os.Exit(1)
 	}
 }
