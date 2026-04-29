@@ -9,10 +9,11 @@ import (
 )
 
 const skillDirName = "task-management-with-faz"
+const bundledSkillPath = "bundled/task-management-with-faz/SKILL.md"
 
 // bundledFiles contains built-in skill files to install for supported tools.
 //
-//go:embed bundled/**
+//go:embed bundled/task-management-with-faz/SKILL.md
 var bundledFiles embed.FS
 
 // InstallCodexSkill installs the bundled faz skill into Codex skills directory.
@@ -23,8 +24,7 @@ func InstallCodexSkill(force bool) (string, error) {
 	}
 
 	files := map[string]string{
-		"SKILL.md":           "bundled/codex/task-management-with-faz/SKILL.md",
-		"agents/openai.yaml": "bundled/codex/task-management-with-faz/agents/openai.yaml",
+		"SKILL.md": bundledSkillPath,
 	}
 
 	return installBundledSkill(root, files, force)
@@ -38,7 +38,7 @@ func InstallClaudeSkill(force bool) (string, error) {
 	}
 
 	files := map[string]string{
-		"SKILL.md": "bundled/claude/task-management-with-faz/SKILL.md",
+		"SKILL.md": bundledSkillPath,
 	}
 
 	return installBundledSkill(root, files, force)

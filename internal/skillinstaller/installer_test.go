@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestInstallCodexSkillCreatesFiles(t *testing.T) {
+func TestInstallCodexSkillCreatesOnlySkillFile(t *testing.T) {
 	tmp := t.TempDir()
 	codexHome := filepath.Join(tmp, "codex-home")
 	t.Setenv("CODEX_HOME", codexHome)
@@ -24,13 +24,12 @@ func TestInstallCodexSkillCreatesFiles(t *testing.T) {
 	}
 
 	skillPath := filepath.Join(installedPath, "SKILL.md")
-	openAIPath := filepath.Join(installedPath, "agents", "openai.yaml")
-
 	if _, err := os.Stat(skillPath); err != nil {
 		t.Fatalf("missing SKILL.md: %v", err)
 	}
-	if _, err := os.Stat(openAIPath); err != nil {
-		t.Fatalf("missing openai.yaml: %v", err)
+	assertInstalledSharedSkill(t, skillPath)
+	if _, err := os.Stat(filepath.Join(installedPath, "agents")); !os.IsNotExist(err) {
+		t.Fatalf("expected no agents directory, got err=%v", err)
 	}
 }
 
@@ -110,7 +109,24 @@ func TestInstallClaudeSkillCreatesOnlySkillFile(t *testing.T) {
 	if _, err := os.Stat(skillPath); err != nil {
 		t.Fatalf("missing SKILL.md: %v", err)
 	}
+	assertInstalledSharedSkill(t, skillPath)
 	if _, err := os.Stat(filepath.Join(installedPath, "agents")); !os.IsNotExist(err) {
 		t.Fatalf("expected no agents directory, got err=%v", err)
+	}
+}
+
+func assertInstalledSharedSkill(t *testing.T, skillPath string) {
+	t.Helper()
+
+	installedSkill, err := os.ReadFile(skillPath)
+	if err != nil {
+		t.Fatalf("read installed SKILL.md: %v", err)
+	}
+	expectedSkill, err := bundledFiles.ReadFile(bundledSkillPath)
+	if err != nil {
+		t.Fatalf("read bundled SKILL.md: %v", err)
+	}
+	if string(installedSkill) != string(expectedSkill) {
+		t.Fatal("expected installed skill content to match bundled shared skill content")
 	}
 }
