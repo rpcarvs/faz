@@ -99,7 +99,7 @@ While implementing code and other works you may find bugs, stale code, missing d
 - Reopen if needed: `faz reopen <id>`
 - Recap help: `faz recap`
 
-## Execution Pattern for Codex
+## Execution Pattern
 
 Use this pattern whenever the user asks for work.
 
