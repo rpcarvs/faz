@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	"github.com/rpcarvs/faz/internal/model"
 )
 
@@ -258,6 +259,27 @@ func TestViewRendersHeaderAndColumnsAtNarrowWidth(t *testing.T) {
 	if maxRenderedLineWidth(view) > model.width {
 		t.Fatalf("expected rendered view to fit width %d, got %d", model.width, maxRenderedLineWidth(view))
 	}
+}
+
+func TestRenderCardSelectedStylesTextRowsWithSelectedBackground(t *testing.T) {
+	oldProfile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(oldProfile)
+
+	now := time.Now()
+	issue := model.Issue{
+		ID:        "proj-e1.0",
+		Title:     "Short title",
+		Type:      "task",
+		Priority:  1,
+		Status:    "open",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	card := NewModel(stubService{}).renderCard(issue, true, 32)
+
+	assertMarkerStyleContains(t, card, "Short title", "48;5;240")
+	assertMarkerStyleContains(t, card, "P1", "48;5;240")
 }
 
 func TestApplyWindowSizeIgnoresTransientZeroDimensions(t *testing.T) {
@@ -1162,4 +1184,25 @@ func renderedLineCount(text string) int {
 
 func ptrTime(value time.Time) *time.Time {
 	return &value
+}
+
+func assertMarkerStyleContains(t *testing.T, rendered, marker, stylePart string) {
+	t.Helper()
+
+	markerIndex := strings.Index(rendered, marker)
+	if markerIndex < 0 {
+		t.Fatalf("expected rendered card to contain %q: %q", marker, rendered)
+	}
+	styleStart := strings.LastIndex(rendered[:markerIndex], "\x1b[")
+	if styleStart < 0 {
+		t.Fatalf("expected ANSI style before %q: %q", marker, rendered)
+	}
+	styleEnd := strings.Index(rendered[styleStart:], "m")
+	if styleEnd < 0 {
+		t.Fatalf("expected ANSI style terminator before %q: %q", marker, rendered)
+	}
+	style := rendered[styleStart : styleStart+styleEnd+1]
+	if !strings.Contains(style, stylePart) {
+		t.Fatalf("expected style before %q to contain %q, got %q", marker, stylePart, style)
+	}
 }

@@ -798,7 +798,8 @@ func (m Model) renderCard(issue model.Issue, selected bool, width int) string {
 			meta = fmt.Sprintf("%s • No Epic", meta)
 		}
 	}
-	title := fitLines(issue.Title, maxInt(1, width-4), 2)
+	contentWidth := maxInt(1, width-4)
+	title := fitLines(issue.Title, contentWidth, 2)
 
 	cardStyle := lipgloss.NewStyle().
 		Width(maxInt(1, width-2)).
@@ -808,18 +809,22 @@ func (m Model) renderCard(issue model.Issue, selected bool, width int) string {
 		Background(bgColor).
 		Padding(0, 1)
 
-	titleStyle := lipgloss.NewStyle().Foreground(titleColor).Bold(selected)
+	lineStyle := lipgloss.NewStyle().
+		Width(contentWidth).
+		MaxWidth(contentWidth).
+		Background(bgColor)
+	titleStyle := lineStyle.Foreground(titleColor).Bold(selected)
 	metaColor := lipgloss.Color("243")
 	if selected {
 		metaColor = lipgloss.Color("251")
 	}
-	metaStyle := lipgloss.NewStyle().Foreground(metaColor)
+	metaStyle := lineStyle.Foreground(metaColor)
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		titleStyle.Render(title),
-		"",
-		metaStyle.Render(truncateLine(meta, maxInt(1, width-4))),
+		lineStyle.Render(""),
+		metaStyle.Render(truncateLine(meta, contentWidth)),
 	)
 	return lipgloss.PlaceHorizontal(width, lipgloss.Center, cardStyle.Render(content))
 }
