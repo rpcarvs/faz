@@ -15,6 +15,7 @@ const (
 	minRenderableWidth  = 42
 	minRenderableHeight = 11
 	minModalWidth       = 24
+	maxPickerRows       = 13
 	headerLines         = 2
 	columnHeaderLines   = 1
 	cardOuterHeight     = 7
@@ -61,13 +62,14 @@ type Model struct {
 	selectedRow int
 	scrollRow   int
 
-	showPicker  bool
-	pickerIndex int
-	showHelp    bool
-	showEpic    bool
-	showType    bool
-	typeIndex   int
-	typeFilter  string
+	showPicker   bool
+	pickerIndex  int
+	pickerScroll int
+	showHelp     bool
+	showEpic     bool
+	showType     bool
+	typeIndex    int
+	typeFilter   string
 
 	showDetails      bool
 	inspectedIssueID string
@@ -175,7 +177,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "e":
 			m.showPicker = true
-			m.pickerIndex = m.scopeIndex
+			m.pickerIndex = 0
+			m.pickerScroll = 0
 			return m, nil
 		case "o":
 			m.showHelp = true
@@ -262,11 +265,13 @@ func (m Model) updatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.pickerIndex > 0 {
 			m.pickerIndex--
 		}
+		m.ensurePickerVisible()
 		return m, nil
 	case "down", "j":
 		if m.pickerIndex < len(m.catalog.Scopes)-1 {
 			m.pickerIndex++
 		}
+		m.ensurePickerVisible()
 		return m, nil
 	case "enter":
 		m.scopeIndex = m.pickerIndex
@@ -282,6 +287,7 @@ func (m Model) updatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "tab":
 		m.pickerIndex = (m.pickerIndex + 1) % len(m.catalog.Scopes)
+		m.ensurePickerVisible()
 		return m, nil
 	}
 	return m, nil
@@ -868,8 +874,16 @@ func (m Model) renderCompactBoardNotice() string {
 
 func (m Model) renderPicker() string {
 	width := minInt(60, maxInt(minModalWidth, m.width-10))
-	lines := []string{"Select scope", ""}
-	for i, scope := range m.catalog.Scopes {
+	listHeight := m.pickerListHeight()
+	start := m.pickerScroll
+	if start > len(m.catalog.Scopes) {
+		start = len(m.catalog.Scopes)
+	}
+	end := minInt(len(m.catalog.Scopes), start+listHeight)
+
+	lines := []string{"Select scope", fmt.Sprintf("%d/%d", minInt(m.pickerIndex+1, len(m.catalog.Scopes)), len(m.catalog.Scopes)), ""}
+	for i := start; i < end; i++ {
+		scope := m.catalog.Scopes[i]
 		prefix := "  "
 		if i == m.pickerIndex {
 			prefix = "> "
@@ -885,6 +899,40 @@ func (m Model) renderPicker() string {
 		Background(lipgloss.Color("235")).
 		Render(strings.Join(lines, "\n"))
 	return box
+}
+
+// pickerListHeight caps the visible scope rows so the picker fits the terminal.
+func (m Model) pickerListHeight() int {
+	available := m.height - 9
+	if available < 1 {
+		return 1
+	}
+	return minInt(maxPickerRows, available)
+}
+
+// ensurePickerVisible scrolls the picker window to keep the selected scope visible.
+func (m *Model) ensurePickerVisible() {
+	if m.pickerIndex < 0 {
+		m.pickerIndex = 0
+	}
+	if len(m.catalog.Scopes) == 0 {
+		m.pickerScroll = 0
+		return
+	}
+	if m.pickerIndex >= len(m.catalog.Scopes) {
+		m.pickerIndex = len(m.catalog.Scopes) - 1
+	}
+
+	listHeight := m.pickerListHeight()
+	if m.pickerIndex < m.pickerScroll {
+		m.pickerScroll = m.pickerIndex
+	}
+	if m.pickerIndex >= m.pickerScroll+listHeight {
+		m.pickerScroll = m.pickerIndex - listHeight + 1
+	}
+	if m.pickerScroll < 0 {
+		m.pickerScroll = 0
+	}
 }
 
 func (m Model) renderHelp() string {

@@ -1,6 +1,7 @@
 package kanban
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -392,6 +393,96 @@ func TestQClosesEpicPickerWithoutQuitting(t *testing.T) {
 	}
 	if cmd != nil {
 		t.Fatal("expected q in epic picker to avoid quitting the app")
+	}
+}
+
+func TestEOpensEpicPickerAtTop(t *testing.T) {
+	model := NewModel(stubService{})
+	model.ready = true
+	model.width = 80
+	model.height = 24
+	model.scopeIndex = 4
+	model.pickerIndex = 4
+	model.pickerScroll = 3
+	model.catalog = Catalog{Scopes: testScopes(8)}
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+	model = updated.(Model)
+
+	if !model.showPicker {
+		t.Fatal("expected e to open epic picker")
+	}
+	if model.pickerIndex != 0 || model.pickerScroll != 0 {
+		t.Fatalf("expected picker to open at top, got index=%d scroll=%d", model.pickerIndex, model.pickerScroll)
+	}
+	if cmd != nil {
+		t.Fatal("expected no command when opening epic picker")
+	}
+}
+
+func TestEpicPickerScrollsWhenSelectionMovesPastVisibleRows(t *testing.T) {
+	model := NewModel(stubService{})
+	model.ready = true
+	model.width = 80
+	model.height = 14
+	model.showPicker = true
+	model.catalog = Catalog{Scopes: testScopes(12)}
+
+	for i := 0; i < 6; i++ {
+		updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyDown})
+		model = updated.(Model)
+		if cmd != nil {
+			t.Fatal("expected no command while moving picker selection")
+		}
+	}
+
+	if model.pickerIndex != 6 {
+		t.Fatalf("expected picker index 6, got %d", model.pickerIndex)
+	}
+	if model.pickerScroll == 0 {
+		t.Fatal("expected picker to scroll after moving past visible rows")
+	}
+
+	view := model.renderPicker()
+	if strings.Contains(view, "Epic 01") {
+		t.Fatalf("expected first epic to scroll out of view: %s", view)
+	}
+	if !strings.Contains(view, "> Epic 07") {
+		t.Fatalf("expected selected epic to remain visible: %s", view)
+	}
+}
+
+func TestEpicPickerFitsTerminalHeightWithManyEpics(t *testing.T) {
+	model := NewModel(stubService{})
+	model.ready = true
+	model.width = 80
+	model.height = 14
+	model.showPicker = true
+	model.catalog = Catalog{Scopes: testScopes(40)}
+
+	view := model.View()
+	if got := renderedLineCount(view); got > model.height {
+		t.Fatalf("expected picker view height <= %d, got %d\n%s", model.height, got, view)
+	}
+}
+
+func TestEpicPickerUsesExpandedMaximumVisibleRows(t *testing.T) {
+	model := NewModel(stubService{})
+	model.ready = true
+	model.width = 80
+	model.height = 40
+	model.showPicker = true
+	model.catalog = Catalog{Scopes: testScopes(20)}
+
+	view := model.renderPicker()
+	for i := 1; i <= maxPickerRows; i++ {
+		title := fmt.Sprintf("Epic %02d", i)
+		if !strings.Contains(view, title) {
+			t.Fatalf("expected picker to show %q: %s", title, view)
+		}
+	}
+	if strings.Contains(view, "Epic 14") {
+		t.Fatalf("expected picker to cap visible rows at %d: %s", maxPickerRows, view)
 	}
 }
 
@@ -1184,6 +1275,17 @@ func renderedLineCount(text string) int {
 
 func ptrTime(value time.Time) *time.Time {
 	return &value
+}
+
+func testScopes(count int) []Scope {
+	scopes := make([]Scope, 0, count)
+	for i := 0; i < count; i++ {
+		scopes = append(scopes, Scope{
+			Key:   fmt.Sprintf("scope-%02d", i+1),
+			Title: fmt.Sprintf("Epic %02d", i+1),
+		})
+	}
+	return scopes
 }
 
 func assertMarkerStyleContains(t *testing.T, rendered, marker, stylePart string) {
