@@ -20,7 +20,9 @@ var initCmd = &cobra.Command{
 			return err
 		}
 
-		fazDir, _ := fazPaths(projectDir)
+		fazDir, expectedDBPath := fazPaths(projectDir)
+		alreadyInitialized := fileExists(expectedDBPath)
+
 		dbPath, err := db.EnsureProjectFiles(projectDir)
 		if err != nil {
 			return err
@@ -44,7 +46,11 @@ var initCmd = &cobra.Command{
 			return err
 		}
 
-		cmd.Println("faz initialized")
+		if alreadyInitialized {
+			cmd.Println("faz is already initialized")
+		} else {
+			cmd.Println("faz initialized")
+		}
 		cmd.Println("Directory:", fazDir)
 		cmd.Println("Database:", dbPath)
 		cmd.Println("SQLite:", "WAL mode enabled")
@@ -55,6 +61,12 @@ var initCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+// fileExists reports whether a filesystem path already exists.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // ensureGitIgnoreEntry adds an ignore entry if it is not already present.

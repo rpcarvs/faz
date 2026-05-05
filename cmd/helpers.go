@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
@@ -25,13 +26,30 @@ const (
 	ansiYellow = "\033[33m"
 )
 
-// currentProjectDir resolves the active working directory for project-scoped commands.
+// currentProjectDir resolves the Git repository root for project-scoped commands.
 func currentProjectDir() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("resolve working directory: %w", err)
 	}
-	return cwd, nil
+	return gitRootDir(cwd)
+}
+
+// gitRootDir returns the absolute Git top-level directory for a path.
+func gitRootDir(dir string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	cmd.Dir = dir
+
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("faz requires a Git repository. Run `git init` first")
+	}
+
+	root := strings.TrimSpace(string(output))
+	if root == "" {
+		return "", fmt.Errorf("git repository root was empty")
+	}
+	return root, nil
 }
 
 // openService opens the initialized project DB and builds the issue service.
@@ -44,7 +62,7 @@ func openService() (*service.IssueService, *sql.DB, error) {
 	sqlDB, _, err := db.OpenProjectDB(projectDir)
 	if err != nil {
 		if err == db.ErrNotInitialized {
-			return nil, nil, fmt.Errorf("project is not initialized. Run `faz init`")
+			return nil, nil, fmt.Errorf("faz is not initialized for this Git repository. Run `faz init`")
 		}
 		return nil, nil, err
 	}
