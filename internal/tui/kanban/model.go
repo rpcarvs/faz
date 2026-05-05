@@ -77,9 +77,21 @@ type Model struct {
 	details          map[string]issueDetails
 }
 
+// Option configures a kanban Model at construction time.
+type Option func(*Model)
+
+// WithPicker opens the scope/epic picker immediately.
+func WithPicker() Option {
+	return func(m *Model) { m.showPicker = true }
+}
+
 // NewModel builds a new kanban TUI model.
-func NewModel(svc Service) Model {
-	return Model{svc: svc, typeFilter: typeFilterOptions[0]}
+func NewModel(svc Service, opts ...Option) Model {
+	m := Model{svc: svc, typeFilter: typeFilterOptions[0]}
+	for _, o := range opts {
+		o(&m)
+	}
+	return m
 }
 
 // Init starts the first data load and background refresh loop.
@@ -255,6 +267,18 @@ func (m Model) View() string {
 }
 
 func (m Model) updatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if len(m.catalog.Scopes) == 0 {
+		switch msg.String() {
+		case "q", "esc":
+			m.showPicker = false
+			return m, nil
+		case "ctrl+c":
+			return m, tea.Quit
+		default:
+			return m, nil
+		}
+	}
+
 	switch msg.String() {
 	case "q", "esc":
 		m.showPicker = false

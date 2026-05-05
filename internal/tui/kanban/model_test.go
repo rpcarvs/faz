@@ -396,6 +396,24 @@ func TestQClosesEpicPickerWithoutQuitting(t *testing.T) {
 	}
 }
 
+func TestStartupEpicPickerIgnoresTabBeforeCatalogLoads(t *testing.T) {
+	model := NewModel(stubService{}, WithPicker())
+	model.ready = true
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyTab})
+	model = updated.(Model)
+
+	if !model.showPicker {
+		t.Fatal("expected startup picker to stay open")
+	}
+	if model.pickerIndex != 0 {
+		t.Fatalf("expected picker index to remain 0, got %d", model.pickerIndex)
+	}
+	if cmd != nil {
+		t.Fatal("expected tab before catalog load to avoid commands")
+	}
+}
+
 func TestEOpensEpicPickerAtTop(t *testing.T) {
 	model := NewModel(stubService{})
 	model.ready = true

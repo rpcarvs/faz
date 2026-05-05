@@ -6,6 +6,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var kanbanPickEpic bool
+
 var kanbanCmd = &cobra.Command{
 	Use:   "kanban",
 	Short: "Open a read-only kanban TUI for tasks",
@@ -18,7 +20,11 @@ var kanbanCmd = &cobra.Command{
 		}
 		defer func() { _ = sqlDB.Close() }()
 
-		model := kanban.NewModel(svc)
+		var opts []kanban.Option
+		if kanbanPickEpic {
+			opts = append(opts, kanban.WithPicker())
+		}
+		model := kanban.NewModel(svc, opts...)
 		program := tea.NewProgram(model, tea.WithAltScreen())
 		_, err = program.Run()
 		return err
@@ -27,5 +33,6 @@ var kanbanCmd = &cobra.Command{
 
 // init wires command flags and registration.
 func init() {
+	kanbanCmd.Flags().BoolVarP(&kanbanPickEpic, "epic", "e", false, "Open directly to the scope/epic picker")
 	rootCmd.AddCommand(kanbanCmd)
 }
