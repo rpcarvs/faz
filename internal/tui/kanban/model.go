@@ -267,6 +267,18 @@ func (m Model) View() string {
 }
 
 func (m Model) updatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if len(m.catalog.Scopes) == 0 {
+		switch msg.String() {
+		case "q", "esc":
+			m.showPicker = false
+			return m, nil
+		case "ctrl+c":
+			return m, tea.Quit
+		default:
+			return m, nil
+		}
+	}
+
 	switch msg.String() {
 	case "q", "esc":
 		m.showPicker = false
