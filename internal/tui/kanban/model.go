@@ -3,15 +3,14 @@ package kanban
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/fsnotify/fsnotify"
 	"github.com/rpcarvs/faz/internal/model"
 )
 
 const (
-	refreshInterval     = 10 * time.Second
 	minRenderableWidth  = 42
 	minRenderableHeight = 11
 	minModalWidth       = 24
@@ -36,7 +35,7 @@ type detailsLoadedMsg struct {
 	err     error
 }
 
-type refreshTickMsg time.Time
+type dbChangedMsg struct{}
 
 // issueDetails holds dependency context for the kanban detail modal.
 type issueDetails struct {
@@ -48,7 +47,8 @@ type issueDetails struct {
 
 // Model manages the read-only kanban TUI state.
 type Model struct {
-	svc Service
+	svc     Service
+	watcher *fsnotify.Watcher
 
 	width  int
 	height int
@@ -85,6 +85,11 @@ func WithPicker() Option {
 	return func(m *Model) { m.showPicker = true }
 }
 
+// WithWatcher enables event-driven refresh via a filesystem watcher.
+func WithWatcher(w *fsnotify.Watcher) Option {
+	return func(m *Model) { m.watcher = w }
+}
+
 // NewModel builds a new kanban TUI model.
 func NewModel(svc Service, opts ...Option) Model {
 	m := Model{svc: svc, typeFilter: typeFilterOptions[0]}
@@ -94,9 +99,9 @@ func NewModel(svc Service, opts ...Option) Model {
 	return m
 }
 
-// Init starts the first data load and background refresh loop.
+// Init starts the first data load and listens for database changes.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.loadCatalogCmd(), tickCmd())
+	return tea.Batch(m.loadCatalogCmd(), m.watchCmd())
 }
 
 // Update handles input, resizing, refreshes, and modal state transitions.
@@ -134,8 +139,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.details[msg.issueID] = msg.details
 		return m, nil
 
-	case refreshTickMsg:
-		return m, tea.Batch(m.loadCatalogCmd(), tickCmd())
+	case dbChangedMsg:
+		return m, tea.Batch(m.loadCatalogCmd(), m.watchCmd())
 
 	case tea.KeyMsg:
 		if m.showDetails {
@@ -723,10 +728,27 @@ func (m *Model) syncSelectionToInspectedIssue() {
 	m.adjustScroll()
 }
 
-func tickCmd() tea.Cmd {
-	return tea.Tick(refreshInterval, func(t time.Time) tea.Msg {
-		return refreshTickMsg(t)
-	})
+func (m Model) watchCmd() tea.Cmd {
+	if m.watcher == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		for {
+			select {
+			case event, ok := <-m.watcher.Events:
+				if !ok {
+					return nil
+				}
+				if event.Has(fsnotify.Write) {
+					return dbChangedMsg{}
+				}
+			case _, ok := <-m.watcher.Errors:
+				if !ok {
+					return nil
+				}
+			}
+		}
+	}
 }
 
 func (m Model) renderHeader() string {

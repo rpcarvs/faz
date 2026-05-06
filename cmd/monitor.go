@@ -2,27 +2,25 @@ package cmd
 
 import (
 	"fmt"
-	"time"
+	"path/filepath"
 
+	"github.com/fsnotify/fsnotify"
+	"github.com/rpcarvs/faz/internal/db"
 	"github.com/rpcarvs/faz/internal/model"
 	"github.com/spf13/cobra"
 )
 
 var (
-	monitorIntervalSeconds int
-	monitorAll             bool
-	monitorClaimed         bool
+	monitorAll     bool
+	monitorClaimed bool
 )
 
 var monitorCmd = &cobra.Command{
 	Use:   "monitor",
 	Short: "Continuously refresh task list output",
-	Long:  "Monitor loops over list output with a terminal refresh and a configurable interval.",
+	Long:  "Monitor watches the task database and refreshes the list whenever it changes.",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if monitorIntervalSeconds <= 0 {
-			return fmt.Errorf("interval must be greater than 0")
-		}
 		if monitorAll && monitorClaimed {
 			return fmt.Errorf("--all and --claimed cannot be used together")
 		}
@@ -33,15 +31,26 @@ var monitorCmd = &cobra.Command{
 		}
 		defer func() { _ = sqlDB.Close() }()
 
+		projectDir, err := currentProjectDir()
+		if err != nil {
+			return err
+		}
+		watcher, err := fsnotify.NewWatcher()
+		if err != nil {
+			return err
+		}
+		defer watcher.Close()
+		if err := watcher.Add(filepath.Join(projectDir, db.DirName)); err != nil {
+			return err
+		}
+
 		filter := model.ListFilter{All: monitorAll}
 		if monitorClaimed {
 			filter.Status = "in_progress"
 		}
-		interval := time.Duration(monitorIntervalSeconds) * time.Second
 
-		for {
+		render := func() error {
 			_, _ = fmt.Fprint(cmd.OutOrStdout(), "\033[H\033[2J")
-
 			issues, err := svc.List(filter)
 			if err != nil {
 				return err
@@ -53,15 +62,36 @@ var monitorCmd = &cobra.Command{
 				}
 			}
 			printIssueList(cmd.OutOrStdout(), issues)
+			return nil
+		}
 
-			time.Sleep(interval)
+		if err := render(); err != nil {
+			return err
+		}
+
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return nil
+				}
+				if event.Has(fsnotify.Write) {
+					if err := render(); err != nil {
+						return err
+					}
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return nil
+				}
+				return err
+			}
 		}
 	},
 }
 
 // init wires command flags and registration.
 func init() {
-	monitorCmd.Flags().IntVarP(&monitorIntervalSeconds, "interval", "t", 5, "Refresh interval in seconds")
 	monitorCmd.Flags().BoolVar(&monitorAll, "all", false, "Include closed issues")
 	monitorCmd.Flags().BoolVar(&monitorClaimed, "claimed", false, "Show only claimed issues (in_progress)")
 	rootCmd.AddCommand(monitorCmd)
