@@ -1,7 +1,11 @@
 package cmd
 
 import (
+	"path/filepath"
+
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/fsnotify/fsnotify"
+	"github.com/rpcarvs/faz/internal/db"
 	"github.com/rpcarvs/faz/internal/tui/kanban"
 	"github.com/spf13/cobra"
 )
@@ -24,6 +28,21 @@ var kanbanCmd = &cobra.Command{
 		if kanbanPickEpic {
 			opts = append(opts, kanban.WithPicker())
 		}
+
+		projectDir, err := currentProjectDir()
+		if err != nil {
+			return err
+		}
+		watcher, err := fsnotify.NewWatcher()
+		if err != nil {
+			return err
+		}
+		defer watcher.Close()
+		if err := watcher.Add(filepath.Join(projectDir, db.DirName)); err != nil {
+			return err
+		}
+		opts = append(opts, kanban.WithWatcher(watcher))
+
 		model := kanban.NewModel(svc, opts...)
 		program := tea.NewProgram(model, tea.WithAltScreen())
 		_, err = program.Run()
