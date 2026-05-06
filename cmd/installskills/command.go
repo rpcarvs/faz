@@ -2,16 +2,17 @@ package installskills
 
 import "github.com/spf13/cobra"
 
+// ProjectRootFunc resolves the current Git repository root for local installs.
+type ProjectRootFunc func() (string, error)
+
 // NewCommand builds the install parent command and registers skill installers.
-func NewCommand() *cobra.Command {
+func NewCommand(projectRoot ProjectRootFunc) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "install",
-		Short: "Install built-in agent skills and context blocks",
+		Short: "Install built-in agent integration for Codex or Claude",
 	}
 
-	cmd.AddCommand(newCodexSkillCommand())
-	cmd.AddCommand(newClaudeSkillCommand())
-	cmd.AddCommand(newCodexContextCommand())
-	cmd.AddCommand(newClaudeContextCommand())
+	cmd.AddCommand(newProviderCommand("codex", projectRoot))
+	cmd.AddCommand(newProviderCommand("claude", projectRoot))
 	return cmd
 }

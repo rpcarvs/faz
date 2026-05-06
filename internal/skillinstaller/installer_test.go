@@ -1,6 +1,7 @@
 package skillinstaller
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,21 +50,22 @@ func TestInstallCodexSkillFallsBackToHomeWhenCodexHomeUnset(t *testing.T) {
 	}
 }
 
-func TestInstallCodexSkillExistingWithoutForceFails(t *testing.T) {
+func TestInstallCodexSkillExistingWithoutForceIsIdempotent(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("CODEX_HOME", filepath.Join(tmp, "codex-home"))
 	t.Setenv("HOME", tmp)
 
-	if _, err := InstallCodexSkill(false); err != nil {
+	firstPath, err := InstallCodexSkill(false)
+	if err != nil {
 		t.Fatalf("first install should succeed: %v", err)
 	}
 
-	_, err := InstallCodexSkill(false)
-	if err == nil {
-		t.Fatal("expected error when skill already exists")
+	secondPath, err := InstallCodexSkill(false)
+	if err != nil {
+		t.Fatalf("second install should succeed: %v", err)
 	}
-	if !strings.Contains(err.Error(), "already exists") {
-		t.Fatalf("expected already exists error, got: %v", err)
+	if secondPath != firstPath {
+		t.Fatalf("expected same install path, got %s and %s", firstPath, secondPath)
 	}
 }
 
@@ -115,6 +117,136 @@ func TestInstallClaudeSkillCreatesOnlySkillFile(t *testing.T) {
 	}
 }
 
+func TestInstallProviderCodexGlobalInstallsSkillContextAndHooks(t *testing.T) {
+	tmp := t.TempDir()
+	codexHome := filepath.Join(tmp, "codex-home")
+	t.Setenv("CODEX_HOME", codexHome)
+	t.Setenv("HOME", tmp)
+
+	result, err := InstallProvider(InstallOptions{Provider: ProviderCodex})
+	if err != nil {
+		t.Fatalf("install codex provider: %v", err)
+	}
+
+	assertInstalledSharedSkill(t, filepath.Join(result.SkillPath, "SKILL.md"))
+	assertFileContains(t, result.ContextPath, contextBlockBegin)
+	assertFileContains(t, result.HookPath, sessionStartCommand)
+	assertFileContains(t, result.CodexConfigPath, "codex_hooks = true")
+	if result.ContextPath != filepath.Join(codexHome, "AGENTS.md") {
+		t.Fatalf("unexpected context path: %s", result.ContextPath)
+	}
+	if result.HookPath != filepath.Join(codexHome, "hooks.json") {
+		t.Fatalf("unexpected hook path: %s", result.HookPath)
+	}
+}
+
+func TestInstallProviderClaudeLocalUsesSharedAgentsAndPointer(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	result, err := InstallProvider(InstallOptions{
+		Provider:  ProviderClaude,
+		Local:     true,
+		LocalRoot: root,
+	})
+	if err != nil {
+		t.Fatalf("install claude provider locally: %v", err)
+	}
+
+	if result.ContextPath != filepath.Join(root, "AGENTS.md") {
+		t.Fatalf("unexpected context path: %s", result.ContextPath)
+	}
+	if result.ClaudePointerPath != filepath.Join(root, "CLAUDE.md") {
+		t.Fatalf("unexpected pointer path: %s", result.ClaudePointerPath)
+	}
+	assertFileContains(t, result.ContextPath, contextBlockBegin)
+	assertFileContains(t, result.ClaudePointerPath, "See [AGENTS.md](./AGENTS.md)")
+	assertFileContains(t, result.HookPath, sessionStartCommand)
+	assertInstalledSharedSkill(t, filepath.Join(result.SkillPath, "SKILL.md"))
+}
+
+func TestInstallProviderLocalCodexAndClaudeShareOneContextBlock(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	if _, err := InstallProvider(InstallOptions{Provider: ProviderCodex, Local: true, LocalRoot: root}); err != nil {
+		t.Fatalf("install codex locally: %v", err)
+	}
+	if _, err := InstallProvider(InstallOptions{Provider: ProviderClaude, Local: true, LocalRoot: root}); err != nil {
+		t.Fatalf("install claude locally: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(root, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("read AGENTS.md: %v", err)
+	}
+	if count := strings.Count(string(content), contextBlockBegin); count != 1 {
+		t.Fatalf("expected one managed context block, got %d", count)
+	}
+}
+
+func TestInstallHookConfigAtPathMergesWithoutDuplication(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hooks.json")
+	existing := []byte(`{"hooks":{"SessionStart":[{"matcher":"startup","hooks":[{"type":"command","command":"echo existing"}]}]}}`)
+	if err := os.WriteFile(path, existing, 0o644); err != nil {
+		t.Fatalf("seed hooks: %v", err)
+	}
+
+	if _, err := InstallHookConfigAtPath(path); err != nil {
+		t.Fatalf("first hook install: %v", err)
+	}
+	if _, err := InstallHookConfigAtPath(path); err != nil {
+		t.Fatalf("second hook install: %v", err)
+	}
+
+	var config map[string]any
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read hooks: %v", err)
+	}
+	if err := json.Unmarshal(data, &config); err != nil {
+		t.Fatalf("parse hooks: %v", err)
+	}
+	text := string(data)
+	if count := strings.Count(text, sessionStartCommand); count != 1 {
+		t.Fatalf("expected one faz hook, got %d in %s", count, text)
+	}
+	if count := strings.Count(text, "echo existing"); count != 1 {
+		t.Fatalf("expected existing hook preserved, got %d in %s", count, text)
+	}
+}
+
+func TestInstallHookConfigAtPathReportsInvalidJSON(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hooks.json")
+	if err := os.WriteFile(path, []byte("{invalid"), 0o644); err != nil {
+		t.Fatalf("seed hooks: %v", err)
+	}
+
+	_, err := InstallHookConfigAtPath(path)
+	if err == nil {
+		t.Fatal("expected invalid JSON error")
+	}
+	if !strings.Contains(err.Error(), "parse current hook config") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestEnsureCodexHooksEnabledAddsFeatureFlag(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("[model]\nname = \"gpt\"\n"), 0o644); err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+
+	_, action, err := EnsureCodexHooksEnabled(path)
+	if err != nil {
+		t.Fatalf("ensure hooks enabled: %v", err)
+	}
+	if action != "updated" {
+		t.Fatalf("expected updated action, got %q", action)
+	}
+	assertFileContains(t, path, "[features]\ncodex_hooks = true")
+}
+
 func assertInstalledSharedSkill(t *testing.T, skillPath string) {
 	t.Helper()
 
@@ -128,5 +260,17 @@ func assertInstalledSharedSkill(t *testing.T, skillPath string) {
 	}
 	if string(installedSkill) != string(expectedSkill) {
 		t.Fatal("expected installed skill content to match bundled shared skill content")
+	}
+}
+
+func assertFileContains(t *testing.T, path string, expected string) {
+	t.Helper()
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	if !strings.Contains(string(content), expected) {
+		t.Fatalf("expected %s to contain %q, got:\n%s", path, expected, content)
 	}
 }

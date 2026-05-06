@@ -25,6 +25,8 @@ const mandatoryContextBody = `# MANDATORY Task Management
 - Type reminder: Classify each issue type: task, bug, feature, chore, decision.
 - Dynamic issue creation: Remember you must dynamically create issues during work if you find a bug or other problems.`
 
+const claudeLocalPointer = "See [AGENTS.md](./AGENTS.md)\n"
+
 // CodexContextPath resolves the global Codex AGENTS.md path.
 func CodexContextPath() (string, error) {
 	codexHome := os.Getenv("CODEX_HOME")
@@ -88,6 +90,11 @@ func InstallContextAtPath(path string) (string, error) {
 		return "", fmt.Errorf("write context file %s: %w", path, err)
 	}
 	return action, nil
+}
+
+// InstallClaudePointerAtPath writes the local Claude pointer to AGENTS.md.
+func InstallClaudePointerAtPath(path string) (string, error) {
+	return writeFileIfChanged(path, []byte(claudeLocalPointer), 0o644)
 }
 
 // upsertContextBlock keeps exactly one managed block with the latest text.

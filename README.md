@@ -38,20 +38,36 @@ faz init
 faz onboard
 ```
 
-## Install skills
+## Install agent integration
 
-`faz` ships built-in installer commands for the `task-management-with-faz` skill:
+`faz` can install its agent integration for Codex or Claude:
 
 ```bash
-faz install codex-skill
-faz install claude-skill
+faz install codex
+faz install claude
 ```
 
 Behavior:
 
-- Installs the skill into the target agent skill directory.
-- Prints the final installed path after success.
-- Fails if the destination already exists, unless `--force` is passed.
+- Installs the `task-management-with-faz` skill.
+- Adds or updates the managed FAZ task-management context block.
+- Installs a SessionStart hook that runs `faz init && faz onboard` inside Git repositories.
+- For Codex, enables the `codex_hooks` feature in `config.toml`.
+- Prints all installed or updated paths.
+
+Use `--local` to install into the current Git repository instead of the global agent config:
+
+```bash
+faz install codex --local
+faz install claude --local
+```
+
+Local behavior:
+
+- Resolves the Git repository root even when run from a subdirectory.
+- Writes the managed context block to repo-root `AGENTS.md`.
+- For Claude, writes repo-root `CLAUDE.md` as a pointer to `AGENTS.md`.
+- Installs skills and hooks under repo-root `.codex/` or `.claude/`.
 
 ## Shell completion
 
@@ -62,23 +78,6 @@ faz completion bash
 faz completion zsh
 faz completion fish
 ```
-
-## Install context
-
-`faz` also ships context installers for Codex and Claude global context files:
-
-```bash
-faz install codex-context
-faz install claude-context
-```
-
-Behavior:
-
-- Ensures the target context file exists.
-- Manages the block between `<!-- FAZ-TASK-MANAGEMENT:BEGIN -->` and `<!-- FAZ-TASK-MANAGEMENT:END -->`.
-- Upserts managed content: appends the block when missing, replaces it when present.
-- By default writes to global files (`~/.codex/AGENTS.md` and `~/.claude/CLAUDE.md`).
-- `--local` writes context files into the current project directory.
 
 ## Storage model
 
@@ -96,10 +95,10 @@ Main schema:
 
 ```bash
 faz recap
-faz install codex-skill
-faz install claude-skill
-faz install codex-context
-faz install claude-context
+faz install codex
+faz install claude
+faz install codex --local
+faz install claude --local
 faz create "Checkout revamp" --type epic --priority 1 --description "Improve checkout"
 faz create "Address validation" --type task --priority 1 --parent faz-ab12 --description "Client and server checks"
 faz dep add faz-ab12.0 faz-ab12
