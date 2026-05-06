@@ -1,3 +1,8 @@
 .faz/
 .treelines/
 dist/
+
+.codex
+.claude
+AGENTS.md
+CLAUDE.md
