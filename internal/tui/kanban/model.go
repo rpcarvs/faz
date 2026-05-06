@@ -36,6 +36,7 @@ type detailsLoadedMsg struct {
 }
 
 type dbChangedMsg struct{}
+type watchErrMsg struct{ err error }
 
 // issueDetails holds dependency context for the kanban detail modal.
 type issueDetails struct {
@@ -141,6 +142,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case dbChangedMsg:
 		return m, tea.Batch(m.loadCatalogCmd(), m.watchCmd())
+
+	case watchErrMsg:
+		m.err = msg.err
+		return m, m.watchCmd()
 
 	case tea.KeyMsg:
 		if m.showDetails {
@@ -733,20 +738,17 @@ func (m Model) watchCmd() tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		for {
-			select {
-			case event, ok := <-m.watcher.Events:
-				if !ok {
-					return nil
-				}
-				if event.Has(fsnotify.Write) {
-					return dbChangedMsg{}
-				}
-			case _, ok := <-m.watcher.Errors:
-				if !ok {
-					return nil
-				}
+		select {
+		case _, ok := <-m.watcher.Events:
+			if !ok {
+				return nil
 			}
+			return dbChangedMsg{}
+		case err, ok := <-m.watcher.Errors:
+			if !ok {
+				return nil
+			}
+			return watchErrMsg{err: err}
 		}
 	}
 }

@@ -71,14 +71,12 @@ var monitorCmd = &cobra.Command{
 
 		for {
 			select {
-			case event, ok := <-watcher.Events:
+			case _, ok := <-watcher.Events:
 				if !ok {
 					return nil
 				}
-				if event.Has(fsnotify.Write) {
-					if err := render(); err != nil {
-						return err
-					}
+				if err := render(); err != nil {
+					return err
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
