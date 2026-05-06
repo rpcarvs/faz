@@ -118,6 +118,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 			return m, nil
 		}
+		m.err = nil
 		m.catalog = msg.catalog
 		if m.scopeIndex >= len(m.catalog.Scopes) {
 			m.scopeIndex = 0
@@ -770,7 +771,7 @@ func (m Model) renderHeader() string {
 
 	title := "faz kanban"
 	scopeTitle := "Epic: " + scope.Title
-	subtitle := fmt.Sprintf("Auto-refresh every 10s. Type: %s.", strings.ToUpper(m.typeFilter))
+	subtitle := fmt.Sprintf("Live refresh. Type: %s.", strings.ToUpper(m.typeFilter))
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		headerStyle.Render(truncateLine(fmt.Sprintf("%s  |  %s", title, scopeTitle), contentWidth)),
