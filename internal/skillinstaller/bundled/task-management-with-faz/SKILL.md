@@ -17,7 +17,7 @@ No work without a claimed faz task.
 Follow this lifecycle in order for every coding session.
 
 1. Orient
-- Run `faz onboard`.
+- (Occasionally) Run `faz onboard`. This does not need to be execute all the time but occasionally.
 - Run `faz info`.
 - Run `faz ready`.
 
