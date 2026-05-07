@@ -18,7 +18,7 @@ var readyCmd = &cobra.Command{
 		}
 
 		if len(issues) == 0 {
-			cmd.Println("No ready work")
+			stdoutPrintln(cmd, "No ready work")
 			return nil
 		}
 		printIssueList(cmd.OutOrStdout(), issues)

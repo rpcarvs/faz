@@ -42,9 +42,9 @@ var claimCmd = &cobra.Command{
 			return err
 		}
 
-		cmd.Printf("Claimed issue: %s\n", ids[0])
-		cmd.Printf("  Status: in_progress\n")
-		cmd.Printf("  Lease TTL: %s\n", claimTTL)
+		stdoutPrintf(cmd, "Claimed issue: %s\n", ids[0])
+		stdoutPrintf(cmd, "  Status: in_progress\n")
+		stdoutPrintf(cmd, "  Lease TTL: %s\n", claimTTL)
 		printIssueReminder(cmd.OutOrStdout(), issue)
 		return nil
 	},

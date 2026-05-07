@@ -62,8 +62,8 @@ var updateCmd = &cobra.Command{
 			return err
 		}
 
-		cmd.Printf("Updated issue: %s\n", ids[0])
-		cmd.Printf("  Status: updated\n")
+		stdoutPrintf(cmd, "Updated issue: %s\n", ids[0])
+		stdoutPrintf(cmd, "  Status: updated\n")
 		return nil
 	},
 }

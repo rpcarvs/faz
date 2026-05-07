@@ -22,8 +22,8 @@ var closeCmd = &cobra.Command{
 			if err := svc.Close(id); err != nil {
 				return err
 			}
-			cmd.Printf("Closed issue: %s\n", id)
-			cmd.Printf("  Status: closed\n")
+			stdoutPrintf(cmd, "Closed issue: %s\n", id)
+			stdoutPrintf(cmd, "  Status: closed\n")
 		}
 
 		return nil

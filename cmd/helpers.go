@@ -14,6 +14,7 @@ import (
 	"github.com/rpcarvs/faz/internal/model"
 	"github.com/rpcarvs/faz/internal/repo"
 	"github.com/rpcarvs/faz/internal/service"
+	"github.com/spf13/cobra"
 )
 
 const (
@@ -70,6 +71,21 @@ func openService() (*service.IssueService, *sql.DB, error) {
 	projectName := filepath.Base(projectDir)
 	issueRepo := repo.NewIssueRepo(sqlDB)
 	return service.NewIssueService(issueRepo, projectName), sqlDB, nil
+}
+
+// stdoutPrint writes plain command output to stdout.
+func stdoutPrint(cmd *cobra.Command, args ...any) {
+	_, _ = fmt.Fprint(cmd.OutOrStdout(), args...)
+}
+
+// stdoutPrintln writes line-oriented command output to stdout.
+func stdoutPrintln(cmd *cobra.Command, args ...any) {
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), args...)
+}
+
+// stdoutPrintf writes formatted command output to stdout.
+func stdoutPrintf(cmd *cobra.Command, format string, args ...any) {
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), format, args...)
 }
 
 // printIssueTable writes tabular issue rows to the provided writer.

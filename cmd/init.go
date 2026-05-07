@@ -47,17 +47,17 @@ var initCmd = &cobra.Command{
 		}
 
 		if alreadyInitialized {
-			cmd.Println("faz is already initialized")
+			stdoutPrintln(cmd, "faz is already initialized")
 		} else {
-			cmd.Println("faz initialized")
+			stdoutPrintln(cmd, "faz initialized")
 		}
-		cmd.Println("Directory:", fazDir)
-		cmd.Println("Database:", dbPath)
-		cmd.Println("SQLite:", "WAL mode enabled")
+		stdoutPrintln(cmd, "Directory:", fazDir)
+		stdoutPrintln(cmd, "Database:", dbPath)
+		stdoutPrintln(cmd, "SQLite:", "WAL mode enabled")
 		if addedGitIgnore {
-			cmd.Println("Gitignore:", ".faz/ added")
+			stdoutPrintln(cmd, "Gitignore:", ".faz/ added")
 		} else {
-			cmd.Println("Gitignore:", ".faz/ already present")
+			stdoutPrintln(cmd, "Gitignore:", ".faz/ already present")
 		}
 		return nil
 	},

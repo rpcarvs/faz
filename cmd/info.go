@@ -17,11 +17,11 @@ var infoCmd = &cobra.Command{
 			return err
 		}
 
-		cmd.Printf("Open issues: %d\n", openCount)
-		cmd.Println()
-		cmd.Println("Latest completed (max 5):")
+		stdoutPrintf(cmd, "Open issues: %d\n", openCount)
+		stdoutPrintln(cmd)
+		stdoutPrintln(cmd, "Latest completed (max 5):")
 		if len(completed) == 0 {
-			cmd.Println("  none")
+			stdoutPrintln(cmd, "  none")
 			return nil
 		}
 		for _, issue := range completed {
@@ -29,7 +29,7 @@ var infoCmd = &cobra.Command{
 			if issue.ClosedAt != nil {
 				closedAt = issue.ClosedAt.Format("2006-01-02 15:04")
 			}
-			cmd.Printf("  %s [%s P%d] %s (closed %s)\n", issue.ID, issue.Type, issue.Priority, issue.Title, closedAt)
+			stdoutPrintf(cmd, "  %s [%s P%d] %s (closed %s)\n", issue.ID, issue.Type, issue.Priority, issue.Title, closedAt)
 		}
 
 		return nil

@@ -27,9 +27,9 @@ var createCmd = &cobra.Command{
 
 		description := defaultDescription(createDescription)
 		if description == "" {
-			cmd.Println("Warning: creating issue without description.")
-			cmd.Println("  Issues without descriptions lack context for future work.")
-			cmd.Println("  Consider adding --description \"Why this issue exists and what needs to be done\"")
+			stdoutPrintln(cmd, "Warning: creating issue without description.")
+			stdoutPrintln(cmd, "  Issues without descriptions lack context for future work.")
+			stdoutPrintln(cmd, "  Consider adding --description \"Why this issue exists and what needs to be done\"")
 		}
 
 		var parentID *string
@@ -53,13 +53,13 @@ var createCmd = &cobra.Command{
 			return err
 		}
 
-		cmd.Printf("Created issue: %s\n", id)
-		cmd.Printf("  Title: %s\n", args[0])
-		cmd.Printf("  Type: %s\n", createType)
-		cmd.Printf("  Priority: P%d\n", createPriority)
-		cmd.Printf("  Status: open\n")
+		stdoutPrintf(cmd, "Created issue: %s\n", id)
+		stdoutPrintf(cmd, "  Title: %s\n", args[0])
+		stdoutPrintf(cmd, "  Type: %s\n", createType)
+		stdoutPrintf(cmd, "  Priority: P%d\n", createPriority)
+		stdoutPrintf(cmd, "  Status: open\n")
 		if parentID != nil {
-			cmd.Printf("  Parent: %s\n", *parentID)
+			stdoutPrintf(cmd, "  Parent: %s\n", *parentID)
 		}
 		return nil
 	},

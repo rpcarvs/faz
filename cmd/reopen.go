@@ -22,8 +22,8 @@ var reopenCmd = &cobra.Command{
 			if err := svc.Reopen(id); err != nil {
 				return err
 			}
-			cmd.Printf("Reopened issue: %s\n", id)
-			cmd.Printf("  Status: open\n")
+			stdoutPrintf(cmd, "Reopened issue: %s\n", id)
+			stdoutPrintf(cmd, "  Status: open\n")
 		}
 
 		return nil

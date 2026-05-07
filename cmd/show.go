@@ -27,29 +27,29 @@ var showCmd = &cobra.Command{
 			return err
 		}
 
-		cmd.Printf("ID: %s\n", issue.ID)
-		cmd.Printf("Title: %s\n", issue.Title)
-		cmd.Printf("Type: %s\n", issue.Type)
-		cmd.Printf("Priority: P%d\n", issue.Priority)
-		cmd.Printf("Status: %s\n", issue.Status)
+		stdoutPrintf(cmd, "ID: %s\n", issue.ID)
+		stdoutPrintf(cmd, "Title: %s\n", issue.Title)
+		stdoutPrintf(cmd, "Type: %s\n", issue.Type)
+		stdoutPrintf(cmd, "Priority: P%d\n", issue.Priority)
+		stdoutPrintf(cmd, "Status: %s\n", issue.Status)
 		if issue.ClaimedAt != nil {
-			cmd.Printf("Claimed at: %s\n", issue.ClaimedAt.Format("2006-01-02 15:04:05"))
+			stdoutPrintf(cmd, "Claimed at: %s\n", issue.ClaimedAt.Format("2006-01-02 15:04:05"))
 		}
 		if issue.ClaimExpiresAt != nil {
-			cmd.Printf("Claim expires: %s\n", issue.ClaimExpiresAt.Format("2006-01-02 15:04:05"))
+			stdoutPrintf(cmd, "Claim expires: %s\n", issue.ClaimExpiresAt.Format("2006-01-02 15:04:05"))
 		}
 		if issue.ParentID != nil {
-			cmd.Printf("Parent: %s\n", *issue.ParentID)
+			stdoutPrintf(cmd, "Parent: %s\n", *issue.ParentID)
 		}
-		cmd.Printf("Created: %s\n", issue.CreatedAt.Format("2006-01-02 15:04:05"))
-		cmd.Printf("Updated: %s\n", issue.UpdatedAt.Format("2006-01-02 15:04:05"))
+		stdoutPrintf(cmd, "Created: %s\n", issue.CreatedAt.Format("2006-01-02 15:04:05"))
+		stdoutPrintf(cmd, "Updated: %s\n", issue.UpdatedAt.Format("2006-01-02 15:04:05"))
 		if issue.ClosedAt != nil {
-			cmd.Printf("Closed: %s\n", issue.ClosedAt.Format("2006-01-02 15:04:05"))
+			stdoutPrintf(cmd, "Closed: %s\n", issue.ClosedAt.Format("2006-01-02 15:04:05"))
 		}
 		if strings.TrimSpace(issue.Description) != "" {
-			cmd.Println()
-			cmd.Println("Description:")
-			cmd.Println(issue.Description)
+			stdoutPrintln(cmd)
+			stdoutPrintln(cmd, "Description:")
+			stdoutPrintln(cmd, issue.Description)
 		}
 
 		children, err := svc.Children(issue.ID)
@@ -65,31 +65,31 @@ var showCmd = &cobra.Command{
 			return err
 		}
 
-		cmd.Println()
-		cmd.Println("Children:")
+		stdoutPrintln(cmd)
+		stdoutPrintln(cmd, "Children:")
 		if len(children) == 0 {
-			cmd.Println("  none")
+			stdoutPrintln(cmd, "  none")
 		} else {
 			for _, child := range children {
-				cmd.Printf("  %s [%s P%d %s] %s\n", child.ID, child.Type, child.Priority, child.Status, child.Title)
+				stdoutPrintf(cmd, "  %s [%s P%d %s] %s\n", child.ID, child.Type, child.Priority, child.Status, child.Title)
 			}
 		}
 
-		cmd.Println("Dependencies:")
+		stdoutPrintln(cmd, "Dependencies:")
 		if len(deps) == 0 {
-			cmd.Println("  none")
+			stdoutPrintln(cmd, "  none")
 		} else {
 			for _, dep := range deps {
-				cmd.Printf("  %s [%s]\n", dep.ID, dep.Title)
+				stdoutPrintf(cmd, "  %s [%s]\n", dep.ID, dep.Title)
 			}
 		}
 
-		cmd.Println("Dependents:")
+		stdoutPrintln(cmd, "Dependents:")
 		if len(dependents) == 0 {
-			cmd.Println("  none")
+			stdoutPrintln(cmd, "  none")
 		} else {
 			for _, dependent := range dependents {
-				cmd.Printf("  %s [%s]\n", dependent.ID, dependent.Title)
+				stdoutPrintf(cmd, "  %s [%s]\n", dependent.ID, dependent.Title)
 			}
 		}
 

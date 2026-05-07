@@ -22,7 +22,7 @@ var deleteCmd = &cobra.Command{
 			if err := svc.Delete(id); err != nil {
 				return err
 			}
-			cmd.Printf("Deleted issue: %s\n", id)
+			stdoutPrintf(cmd, "Deleted issue: %s\n", id)
 		}
 		return nil
 	},
