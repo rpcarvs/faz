@@ -30,5 +30,7 @@ func Execute(version string) {
 
 // init wires command flags and registration.
 func init() {
+	rootCmd.SetOut(os.Stdout)
+	rootCmd.SetErr(os.Stderr)
 	rootCmd.SilenceUsage = true
 }

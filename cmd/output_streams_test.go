@@ -8,84 +8,36 @@ import (
 	"github.com/rpcarvs/faz/internal/model"
 )
 
-// TestOnboardAndRecapWriteToStdout verifies static help text stays off stderr.
-func TestOnboardAndRecapWriteToStdout(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		run  func(*testing.T, *bytes.Buffer, *bytes.Buffer)
-	}{
-		{
-			name: "onboard",
-			run: func(t *testing.T, stdout, stderr *bytes.Buffer) {
-				onboardCmd.SetOut(stdout)
-				onboardCmd.SetErr(stderr)
-				onboardCmd.Run(onboardCmd, nil)
-			},
-		},
-		{
-			name: "recap",
-			run: func(t *testing.T, stdout, stderr *bytes.Buffer) {
-				recapCmd.SetOut(stdout)
-				recapCmd.SetErr(stderr)
-				recapCmd.Run(recapCmd, nil)
-			},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-			tc.run(t, stdout, stderr)
-			if stdout.Len() == 0 {
-				t.Fatalf("%s stdout is empty", tc.name)
-			}
-			if stderr.Len() != 0 {
-				t.Fatalf("%s stderr = %q", tc.name, stderr.String())
-			}
-		})
-	}
-}
-
-// TestInfoAndReadyWriteToStdout verifies repo-backed informational output uses stdout.
-func TestInfoAndReadyWriteToStdout(t *testing.T) {
+// TestRootCommandsWriteNormalOutputToStdout verifies runtime command execution keeps stderr clean.
+func TestRootCommandsWriteNormalOutputToStdout(t *testing.T) {
 	root := initGitRepo(t)
 	restore := chdir(t, root)
 	defer restore()
 
 	runInitForTest(t)
 
-	for _, tc := range []struct {
-		name string
-		run  func(*bytes.Buffer, *bytes.Buffer) error
-		want string
+	tests := []struct {
+		name    string
+		args    []string
+		wantOut string
 	}{
-		{
-			name: "info",
-			run: func(stdout, stderr *bytes.Buffer) error {
-				infoCmd.SetOut(stdout)
-				infoCmd.SetErr(stderr)
-				return infoCmd.RunE(infoCmd, nil)
-			},
-			want: "Open issues:",
-		},
-		{
-			name: "ready",
-			run: func(stdout, stderr *bytes.Buffer) error {
-				readyCmd.SetOut(stdout)
-				readyCmd.SetErr(stderr)
-				return readyCmd.RunE(readyCmd, nil)
-			},
-			want: "No ready work",
-		},
-	} {
+		{name: "onboard", args: []string{"onboard"}, wantOut: "## Issue Tracking"},
+		{name: "recap", args: []string{"recap"}, wantOut: "faz recap"},
+		{name: "info", args: []string{"info"}, wantOut: "Open issues:"},
+		{name: "ready", args: []string{"ready"}, wantOut: "No ready work"},
+	}
+
+	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-			if err := tc.run(stdout, stderr); err != nil {
-				t.Fatalf("%s failed: %v", tc.name, err)
+			stdout, stderr, err := executeRootCommand(t, tc.args...)
+			if err != nil {
+				t.Fatalf("execute %s: %v", tc.name, err)
 			}
-			if !strings.Contains(stdout.String(), tc.want) {
-				t.Fatalf("%s stdout = %q, want substring %q", tc.name, stdout.String(), tc.want)
+			if !strings.Contains(stdout, tc.wantOut) {
+				t.Fatalf("%s stdout = %q, want substring %q", tc.name, stdout, tc.wantOut)
 			}
-			if stderr.Len() != 0 {
-				t.Fatalf("%s stderr = %q", tc.name, stderr.String())
+			if stderr != "" {
+				t.Fatalf("%s stderr = %q", tc.name, stderr)
 			}
 		})
 	}
@@ -120,10 +72,8 @@ func TestClaimWritesFullSuccessResponseToStdout(t *testing.T) {
 		t.Fatalf("create issue: %v", err)
 	}
 
-	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-	claimCmd.SetOut(stdout)
-	claimCmd.SetErr(stderr)
-	if err := claimCmd.RunE(claimCmd, []string{issueID}); err != nil {
+	stdout, stderr, err := executeRootCommand(t, "claim", issueID)
+	if err != nil {
 		t.Fatalf("claim failed: %v", err)
 	}
 
@@ -134,23 +84,50 @@ func TestClaimWritesFullSuccessResponseToStdout(t *testing.T) {
 		"Title: Claim me",
 		"Description:",
 	} {
-		if !strings.Contains(stdout.String(), want) {
-			t.Fatalf("claim stdout = %q, want substring %q", stdout.String(), want)
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("claim stdout = %q, want substring %q", stdout, want)
 		}
 	}
-	if stderr.Len() != 0 {
-		t.Fatalf("claim stderr = %q", stderr.String())
+	if stderr != "" {
+		t.Fatalf("claim stderr = %q", stderr)
 	}
+}
+
+// executeRootCommand runs the root command with captured stdout and stderr.
+func executeRootCommand(t *testing.T, args ...string) (string, string, error) {
+	t.Helper()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	previousOut := rootCmd.OutOrStdout()
+	previousErr := rootCmd.ErrOrStderr()
+
+	rootCmd.SetOut(&stdout)
+	rootCmd.SetErr(&stderr)
+	rootCmd.SetArgs(args)
+
+	_, err := rootCmd.ExecuteC()
+
+	rootCmd.SetOut(previousOut)
+	rootCmd.SetErr(previousErr)
+	rootCmd.SetArgs(nil)
+
+	return stdout.String(), stderr.String(), err
 }
 
 // runInitForTest initializes faz in the current repository and fails fast on errors.
 func runInitForTest(t *testing.T) {
 	t.Helper()
 
-	var stdout bytes.Buffer
-	initCmd.SetOut(&stdout)
-	initCmd.SetErr(&bytes.Buffer{})
-	if err := initCmd.RunE(initCmd, nil); err != nil {
+	stdout, stderr, err := executeRootCommand(t, "init")
+	if err != nil {
 		t.Fatalf("run init: %v", err)
+	}
+	if stdout == "" {
+		t.Fatalf("init stdout is empty")
+	}
+	if stderr != "" {
+		t.Fatalf("init stderr = %q", stderr)
 	}
 }
