@@ -12,9 +12,12 @@ import (
 const (
 	contextBlockBegin = "<!-- FAZ-TASK-MANAGEMENT:BEGIN -->"
 	contextBlockEnd   = "<!-- FAZ-TASK-MANAGEMENT:END -->"
+	pointerBlockBegin = "<!-- FAZ-CLAUDE-POINTER:BEGIN -->"
+	pointerBlockEnd   = "<!-- FAZ-CLAUDE-POINTER:END -->"
 )
 
 var managedContextBlockPattern = regexp.MustCompile(`(?s)` + regexp.QuoteMeta(contextBlockBegin) + `.*?` + regexp.QuoteMeta(contextBlockEnd))
+var managedPointerBlockPattern = regexp.MustCompile(`(?s)` + regexp.QuoteMeta(pointerBlockBegin) + `.*?` + regexp.QuoteMeta(pointerBlockEnd))
 
 const mandatoryContextBody = `# MANDATORY Task Management
 
@@ -25,7 +28,7 @@ const mandatoryContextBody = `# MANDATORY Task Management
 - Type reminder: Classify each issue type: task, bug, feature, chore, decision.
 - Dynamic issue creation: Remember you must dynamically create issues during work if you find a bug or other problems.`
 
-const claudeLocalPointer = "See [AGENTS.md](./AGENTS.md)\n"
+const claudeLocalPointerBody = "See [AGENTS.md](./AGENTS.md)"
 
 // CodexContextPath resolves the global Codex AGENTS.md path.
 func CodexContextPath() (string, error) {
@@ -92,9 +95,21 @@ func InstallContextAtPath(path string) (string, error) {
 	return action, nil
 }
 
-// InstallClaudePointerAtPath writes the local Claude pointer to AGENTS.md.
+// InstallClaudePointerAtPath appends or updates the managed Claude pointer block.
 func InstallClaudePointerAtPath(path string) (string, error) {
-	return writeFileIfChanged(path, []byte(claudeLocalPointer), 0o644)
+	existing, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("read Claude pointer file %s: %w", path, err)
+	}
+
+	updated, action := upsertClaudePointerBlock(string(existing))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", fmt.Errorf("create Claude pointer directory %s: %w", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+		return "", fmt.Errorf("write Claude pointer file %s: %w", path, err)
+	}
+	return action, nil
 }
 
 // upsertContextBlock keeps exactly one managed block with the latest text.
@@ -102,6 +117,25 @@ func upsertContextBlock(content string) (string, string) {
 	block := contextBlockBegin + "\n" + mandatoryContextBody + "\n" + contextBlockEnd
 	if managedContextBlockPattern.MatchString(content) {
 		replaced := managedContextBlockPattern.ReplaceAllString(content, block)
+		replaced = strings.TrimRight(replaced, "\n\t ")
+		if replaced == "" {
+			return block + "\n", "updated"
+		}
+		return replaced + "\n", "updated"
+	}
+
+	base := strings.TrimRight(content, "\n\t ")
+	if base == "" {
+		return block + "\n", "appended"
+	}
+	return base + "\n\n" + block + "\n", "appended"
+}
+
+// upsertClaudePointerBlock keeps exactly one managed Claude pointer block.
+func upsertClaudePointerBlock(content string) (string, string) {
+	block := pointerBlockBegin + "\n" + claudeLocalPointerBody + "\n" + pointerBlockEnd
+	if managedPointerBlockPattern.MatchString(content) {
+		replaced := managedPointerBlockPattern.ReplaceAllString(content, block)
 		replaced = strings.TrimRight(replaced, "\n\t ")
 		if replaced == "" {
 			return block + "\n", "updated"

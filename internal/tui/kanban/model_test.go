@@ -774,7 +774,7 @@ func TestEpicDetailsInNoEpicScopeShowsGracefulMessage(t *testing.T) {
 	}
 }
 
-func TestDetailsModalDownMovesSelectionWithinEpicScopeAndStaysOpen(t *testing.T) {
+func TestDetailsModalDownDoesNotChangeSelectionWhenContentFits(t *testing.T) {
 	now := time.Now()
 	parentID := "proj-e1"
 	catalog := buildCatalog([]model.Issue{
@@ -832,21 +832,18 @@ func TestDetailsModalDownMovesSelectionWithinEpicScopeAndStaysOpen(t *testing.T)
 	if !model.showDetails {
 		t.Fatal("expected details modal to remain open")
 	}
-	if issue := model.currentIssue(); issue == nil || issue.ID != parentID+".0" {
-		t.Fatalf("expected down to move to next epic task, got %#v", issue)
+	if issue := model.currentIssue(); issue == nil || issue.ID != parentID+".1" {
+		t.Fatalf("expected down to keep board selection stable, got %#v", issue)
 	}
-	if model.inspectedIssueID != parentID+".0" {
-		t.Fatalf("expected inspected issue to move with modal navigation, got %q", model.inspectedIssueID)
+	if model.inspectedIssueID != parentID+".1" {
+		t.Fatalf("expected inspected issue to remain stable, got %q", model.inspectedIssueID)
 	}
-	if cmd == nil {
-		t.Fatal("expected details reload command for the new task")
-	}
-	if !model.details[parentID+".0"].Loading {
-		t.Fatal("expected next task details to enter loading state")
+	if cmd != nil {
+		t.Fatal("expected no command when scrolling a non-overflowing modal")
 	}
 }
 
-func TestDetailsModalUpMovesWithinAllTasksDoneColumnUsingClosedAtOrder(t *testing.T) {
+func TestDetailsModalUpDoesNotChangeSelectionWhenContentFits(t *testing.T) {
 	now := time.Now()
 	olderClosed := now.Add(-20 * time.Minute)
 	newerClosed := now.Add(-5 * time.Minute)
@@ -904,21 +901,18 @@ func TestDetailsModalUpMovesWithinAllTasksDoneColumnUsingClosedAtOrder(t *testin
 	if !model.showDetails {
 		t.Fatal("expected details modal to remain open")
 	}
-	if issue := model.currentIssue(); issue == nil || issue.ID != "proj-e1.0" {
-		t.Fatalf("expected up to move to newer-closed done task, got %#v", issue)
+	if issue := model.currentIssue(); issue == nil || issue.ID != "proj-e1.1" {
+		t.Fatalf("expected up to keep board selection stable, got %#v", issue)
 	}
-	if model.inspectedIssueID != "proj-e1.0" {
-		t.Fatalf("expected inspected issue to move to newer-closed task, got %q", model.inspectedIssueID)
+	if model.inspectedIssueID != "proj-e1.1" {
+		t.Fatalf("expected inspected issue to remain stable, got %q", model.inspectedIssueID)
 	}
-	if cmd == nil {
-		t.Fatal("expected details reload command for the new done task")
-	}
-	if !model.details["proj-e1.0"].Loading {
-		t.Fatal("expected done task details to enter loading state")
+	if cmd != nil {
+		t.Fatal("expected no command when scrolling a non-overflowing modal")
 	}
 }
 
-func TestDetailsModalRightMovesToAdjacentColumnWithoutCycling(t *testing.T) {
+func TestDetailsModalLeftRightDoNotChangeSelection(t *testing.T) {
 	now := time.Now()
 	parentID := "proj-e1"
 	catalog := buildCatalog([]model.Issue{
@@ -980,35 +974,26 @@ func TestDetailsModalRightMovesToAdjacentColumnWithoutCycling(t *testing.T) {
 	if !model.showDetails {
 		t.Fatal("expected details modal to remain open")
 	}
-	if model.inspectedIssueID != parentID+".1" {
-		t.Fatalf("expected right to move to claimed task, got %q", model.inspectedIssueID)
+	if model.inspectedIssueID != parentID+".0" {
+		t.Fatalf("expected right to keep inspected issue stable, got %q", model.inspectedIssueID)
 	}
-	if model.selectedCol != 1 {
-		t.Fatalf("expected selected column to move to claimed, got %d", model.selectedCol)
-	}
-	if cmd == nil {
-		t.Fatal("expected details reload command for adjacent-column task")
-	}
-
-	updated, cmd = model.Update(tea.KeyMsg{Type: tea.KeyRight})
-	model = updated.(Model)
-	if model.inspectedIssueID != parentID+".2" {
-		t.Fatalf("expected second right to move to done task, got %q", model.inspectedIssueID)
-	}
-	if model.selectedCol != 2 {
-		t.Fatalf("expected selected column to move to done, got %d", model.selectedCol)
-	}
-	if cmd == nil {
-		t.Fatal("expected details reload command for done task")
-	}
-
-	updated, cmd = model.Update(tea.KeyMsg{Type: tea.KeyRight})
-	model = updated.(Model)
-	if model.inspectedIssueID != parentID+".2" {
-		t.Fatalf("expected right at board edge to remain on done task, got %q", model.inspectedIssueID)
+	if model.selectedCol != 0 {
+		t.Fatalf("expected selected column to remain stable, got %d", model.selectedCol)
 	}
 	if cmd != nil {
-		t.Fatal("expected no command when moving right past the last column")
+		t.Fatal("expected no command for right key inside details modal")
+	}
+
+	updated, cmd = model.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	model = updated.(Model)
+	if model.inspectedIssueID != parentID+".0" {
+		t.Fatalf("expected left to keep inspected issue stable, got %q", model.inspectedIssueID)
+	}
+	if model.selectedCol != 0 {
+		t.Fatalf("expected selected column to remain stable, got %d", model.selectedCol)
+	}
+	if cmd != nil {
+		t.Fatal("expected no command for left key inside details modal")
 	}
 }
 
@@ -1188,6 +1173,181 @@ func TestDetailsModalStaysOpenWhenRefreshMovesIssueToAnotherColumn(t *testing.T)
 	}
 	if !strings.Contains(view, "Status: in_progress") {
 		t.Fatalf("expected modal to reflect refreshed claimed status, got %s", view)
+	}
+}
+
+func TestViewWithLongDetailsModalFitsViewport(t *testing.T) {
+	now := time.Now()
+	parentID := "proj-e1"
+	issueID := parentID + ".0"
+	catalog := buildCatalog([]model.Issue{
+		{
+			ID:          issueID,
+			Title:       "Task with long details",
+			Type:        "task",
+			Status:      "open",
+			Description: strings.Repeat("Long detail line for overflow coverage.\n", 40),
+			ParentID:    &parentID,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		},
+		{
+			ID:        parentID,
+			Title:     "E1: Epic",
+			Type:      "epic",
+			Status:    "open",
+			CreatedAt: now.Add(-time.Minute),
+			UpdatedAt: now.Add(-time.Minute),
+		},
+	})
+
+	model := NewModel(stubService{})
+	model.catalog = catalog
+	model.ready = true
+	model.width = 72
+	model.height = 18
+	model.showDetails = true
+	model.inspectedIssueID = issueID
+
+	view := model.View()
+	if got := maxRenderedLineWidth(view); got > model.width {
+		t.Fatalf("expected modal width <= %d, got %d\n%s", model.width, got, view)
+	}
+	if got := renderedLineCount(view); got > model.height {
+		t.Fatalf("expected modal height <= %d, got %d\n%s", model.height, got, view)
+	}
+}
+
+func TestDetailsModalDownScrollsOverflowBeforeNavigating(t *testing.T) {
+	now := time.Now()
+	parentID := "proj-e1"
+	catalog := buildCatalog([]model.Issue{
+		{
+			ID:        parentID,
+			Title:     "E1: Epic",
+			Type:      "epic",
+			Status:    "open",
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:          parentID + ".0",
+			Title:       "Older open task",
+			Type:        "task",
+			Status:      "open",
+			Description: "Task desc",
+			ParentID:    &parentID,
+			CreatedAt:   now.Add(-2 * time.Minute),
+			UpdatedAt:   now.Add(-2 * time.Minute),
+		},
+		{
+			ID:          parentID + ".1",
+			Title:       "Newest open task",
+			Type:        "task",
+			Status:      "open",
+			Description: strings.Repeat("Overflow details line.\n", 40),
+			ParentID:    &parentID,
+			CreatedAt:   now.Add(-1 * time.Minute),
+			UpdatedAt:   now.Add(-1 * time.Minute),
+		},
+	})
+
+	model := NewModel(stubService{})
+	model.catalog = catalog
+	model.ready = true
+	model.width = 80
+	model.height = 18
+	model.details = map[string]issueDetails{}
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected details load command when opening modal")
+	}
+
+	updated, cmd = model.Update(tea.KeyMsg{Type: tea.KeyDown})
+	model = updated.(Model)
+
+	if !model.showDetails {
+		t.Fatal("expected details modal to remain open")
+	}
+	if model.inspectedIssueID != parentID+".1" {
+		t.Fatalf("expected to keep the same inspected issue while scrolling, got %q", model.inspectedIssueID)
+	}
+	if model.detailsScroll != modalScrollStep {
+		t.Fatalf("expected details scroll %d, got %d", modalScrollStep, model.detailsScroll)
+	}
+	if cmd != nil {
+		t.Fatal("expected no command while scrolling overflowing details")
+	}
+}
+
+func TestDetailsModalDownStaysOnSameTaskAfterScrollExhausted(t *testing.T) {
+	now := time.Now()
+	parentID := "proj-e1"
+	catalog := buildCatalog([]model.Issue{
+		{
+			ID:        parentID,
+			Title:     "E1: Epic",
+			Type:      "epic",
+			Status:    "open",
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:          parentID + ".0",
+			Title:       "Older open task",
+			Type:        "task",
+			Status:      "open",
+			Description: "Task desc",
+			ParentID:    &parentID,
+			CreatedAt:   now.Add(-2 * time.Minute),
+			UpdatedAt:   now.Add(-2 * time.Minute),
+		},
+		{
+			ID:          parentID + ".1",
+			Title:       "Newest open task",
+			Type:        "task",
+			Status:      "open",
+			Description: strings.Repeat("Overflow details line.\n", 40),
+			ParentID:    &parentID,
+			CreatedAt:   now.Add(-1 * time.Minute),
+			UpdatedAt:   now.Add(-1 * time.Minute),
+		},
+	})
+
+	model := NewModel(stubService{})
+	model.catalog = catalog
+	model.ready = true
+	model.width = 80
+	model.height = 18
+	model.details = map[string]issueDetails{}
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected details load command when opening modal")
+	}
+
+	issue := model.inspectedIssueRef()
+	if issue == nil {
+		t.Fatal("expected inspected issue after opening modal")
+	}
+	_, _, bodyHeight := model.modalDimensions(true)
+	lines := model.wrapModalLines(model.detailsModalLines(*issue, model.currentIssueDetails()), model.modalContentWidth(model.modalDimensionsWidth()))
+	model.detailsScroll = clampScrollOffset(1<<30, len(lines), bodyHeight)
+
+	updated, cmd = model.Update(tea.KeyMsg{Type: tea.KeyDown})
+	model = updated.(Model)
+
+	if model.inspectedIssueID != parentID+".1" {
+		t.Fatalf("expected down at scroll boundary to keep the same task, got %q", model.inspectedIssueID)
+	}
+	if model.detailsScroll != clampScrollOffset(1<<30, len(lines), bodyHeight) {
+		t.Fatalf("expected scroll to stay clamped at bottom, got %d", model.detailsScroll)
+	}
+	if cmd != nil {
+		t.Fatal("expected no command after reaching modal scroll boundary")
 	}
 }
 

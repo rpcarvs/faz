@@ -138,3 +138,71 @@ func TestInstallContextAtPathReplacesManagedBlockOnly(t *testing.T) {
 		t.Fatalf("surrounding content should stay:\n%s", content)
 	}
 }
+
+func TestInstallClaudePointerAtPathPreservesExistingContent(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "CLAUDE.md")
+
+	seed := "# Existing Claude Notes\n\nKeep this.\n"
+	if err := os.WriteFile(path, []byte(seed), 0o644); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+
+	action, err := InstallClaudePointerAtPath(path)
+	if err != nil {
+		t.Fatalf("install pointer: %v", err)
+	}
+	if action != "appended" {
+		t.Fatalf("expected appended action, got %q", action)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read file: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "# Existing Claude Notes") || !strings.Contains(content, "Keep this.") {
+		t.Fatalf("existing content removed unexpectedly:\n%s", content)
+	}
+	if strings.Count(content, pointerBlockBegin) != 1 || strings.Count(content, pointerBlockEnd) != 1 {
+		t.Fatalf("expected one managed pointer block:\n%s", content)
+	}
+	if !strings.Contains(content, claudeLocalPointerBody) {
+		t.Fatalf("missing pointer body:\n%s", content)
+	}
+}
+
+func TestInstallClaudePointerAtPathReplacesManagedBlockOnly(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "CLAUDE.md")
+
+	seed := "# Header\n\n" +
+		pointerBlockBegin + "\nold pointer\n" + pointerBlockEnd + "\n\n" +
+		"# Footer\n"
+	if err := os.WriteFile(path, []byte(seed), 0o644); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+
+	action, err := InstallClaudePointerAtPath(path)
+	if err != nil {
+		t.Fatalf("install pointer: %v", err)
+	}
+	if action != "updated" {
+		t.Fatalf("expected updated action, got %q", action)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read file: %v", err)
+	}
+	content := string(data)
+	if strings.Contains(content, "old pointer") {
+		t.Fatalf("old managed pointer should be replaced:\n%s", content)
+	}
+	if strings.Count(content, pointerBlockBegin) != 1 || strings.Count(content, pointerBlockEnd) != 1 {
+		t.Fatalf("expected one managed pointer block:\n%s", content)
+	}
+	if !strings.Contains(content, "# Header") || !strings.Contains(content, "# Footer") {
+		t.Fatalf("surrounding content should stay:\n%s", content)
+	}
+}

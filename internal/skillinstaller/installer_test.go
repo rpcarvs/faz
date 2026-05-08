@@ -184,6 +184,70 @@ func TestInstallProviderLocalCodexAndClaudeShareOneContextBlock(t *testing.T) {
 	}
 }
 
+func TestInstallProviderClaudeLocalPreservesExistingClaudeFile(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	claudePath := filepath.Join(root, "CLAUDE.md")
+	seed := "# Existing Claude File\n\nDo not remove this.\n"
+	if err := os.WriteFile(claudePath, []byte(seed), 0o644); err != nil {
+		t.Fatalf("seed CLAUDE.md: %v", err)
+	}
+
+	result, err := InstallProvider(InstallOptions{
+		Provider:  ProviderClaude,
+		Local:     true,
+		LocalRoot: root,
+	})
+	if err != nil {
+		t.Fatalf("install claude provider locally: %v", err)
+	}
+
+	data, err := os.ReadFile(result.ClaudePointerPath)
+	if err != nil {
+		t.Fatalf("read CLAUDE.md: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "# Existing Claude File") || !strings.Contains(content, "Do not remove this.") {
+		t.Fatalf("existing CLAUDE.md content removed unexpectedly:\n%s", content)
+	}
+	if strings.Count(content, pointerBlockBegin) != 1 || strings.Count(content, pointerBlockEnd) != 1 {
+		t.Fatalf("expected one managed pointer block:\n%s", content)
+	}
+}
+
+func TestInstallProviderCodexLocalPreservesExistingAgentsFile(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	agentsPath := filepath.Join(root, "AGENTS.md")
+	seed := "# Existing Agents\n\nKeep these rules.\n"
+	if err := os.WriteFile(agentsPath, []byte(seed), 0o644); err != nil {
+		t.Fatalf("seed AGENTS.md: %v", err)
+	}
+
+	result, err := InstallProvider(InstallOptions{
+		Provider:  ProviderCodex,
+		Local:     true,
+		LocalRoot: root,
+	})
+	if err != nil {
+		t.Fatalf("install codex provider locally: %v", err)
+	}
+
+	data, err := os.ReadFile(result.ContextPath)
+	if err != nil {
+		t.Fatalf("read AGENTS.md: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "# Existing Agents") || !strings.Contains(content, "Keep these rules.") {
+		t.Fatalf("existing AGENTS.md content removed unexpectedly:\n%s", content)
+	}
+	if strings.Count(content, contextBlockBegin) != 1 || strings.Count(content, contextBlockEnd) != 1 {
+		t.Fatalf("expected one managed context block:\n%s", content)
+	}
+}
+
 func TestInstallHookConfigAtPathMergesWithoutDuplication(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hooks.json")
 	existing := []byte(`{"hooks":{"SessionStart":[{"matcher":"startup","hooks":[{"type":"command","command":"echo existing"}]}]}}`)

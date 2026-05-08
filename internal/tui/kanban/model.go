@@ -18,6 +18,8 @@ const (
 	headerLines         = 2
 	columnHeaderLines   = 1
 	cardOuterHeight     = 7
+	modalFrameHeight    = 4
+	modalScrollStep     = 5
 	footerGap           = " • "
 )
 
@@ -76,6 +78,8 @@ type Model struct {
 	inspectedIssueID string
 	inspectedIssue   model.Issue
 	details          map[string]issueDetails
+	detailsScroll    int
+	epicScroll       int
 }
 
 // Option configures a kanban Model at construction time.
@@ -154,14 +158,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter", "esc", "q":
 				m.showDetails = false
 				m.clearInspectedIssue()
-			case "left", "h":
-				return m, m.navigateDetailsCol(-1)
-			case "right", "l":
-				return m, m.navigateDetailsCol(1)
 			case "up", "k":
-				return m, m.navigateDetails(-1)
+				m.scrollDetails(-modalScrollStep)
+				return m, nil
 			case "down", "j":
-				return m, m.navigateDetails(1)
+				m.scrollDetails(modalScrollStep)
+				return m, nil
 			case "ctrl+c":
 				return m, tea.Quit
 			}
@@ -171,6 +173,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "enter", "esc", "q":
 				m.showEpic = false
+				m.epicScroll = 0
+			case "up", "k":
+				m.scrollEpic(-modalScrollStep)
+			case "down", "j":
+				m.scrollEpic(modalScrollStep)
 			case "ctrl+c":
 				return m, tea.Quit
 			}
@@ -208,6 +215,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "d":
 			m.showEpic = true
+			m.epicScroll = 0
 			return m, nil
 		case "f":
 			m.showType = true
@@ -384,6 +392,8 @@ func (m *Model) applyWindowSize(width, height int) {
 	m.width = width
 	m.height = height
 	m.ready = true
+	m.detailsScroll = m.clampDetailsScroll(m.detailsScroll)
+	m.epicScroll = m.clampEpicScroll(m.epicScroll)
 }
 
 // isUndersized reports whether the current window is too small for the full board layout.
@@ -441,58 +451,6 @@ func (m *Model) moveRow(delta int) {
 	}
 	m.selectedRow = next
 	m.adjustScroll()
-}
-
-// navigateDetails moves within the current column and keeps the details modal open.
-func (m *Model) navigateDetails(delta int) tea.Cmd {
-	before := m.inspectedIssueRef()
-	if before == nil {
-		return nil
-	}
-	m.syncSelectionToInspectedIssue()
-	beforeID := before.ID
-	m.moveRow(delta)
-	after := m.currentIssue()
-	if after == nil || after.ID == beforeID {
-		return nil
-	}
-	m.setInspectedIssue(*after)
-	return m.prepareDetailsForIssue(after.ID)
-}
-
-// navigateDetailsCol moves to an adjacent modal column without cycling.
-func (m *Model) navigateDetailsCol(delta int) tea.Cmd {
-	before := m.inspectedIssueRef()
-	if before == nil {
-		return nil
-	}
-	m.syncSelectionToInspectedIssue()
-	nextCol := m.selectedCol + delta
-	if nextCol < 0 || nextCol > 2 {
-		return nil
-	}
-	columns := m.currentColumns()
-	switch nextCol {
-	case 0:
-		if len(columns.Todo) == 0 {
-			return nil
-		}
-	case 1:
-		if len(columns.Claimed) == 0 {
-			return nil
-		}
-	case 2:
-		if len(columns.Done) == 0 {
-			return nil
-		}
-	}
-	m.moveCol(delta)
-	after := m.currentIssue()
-	if after == nil || after.ID == before.ID {
-		return nil
-	}
-	m.setInspectedIssue(*after)
-	return m.prepareDetailsForIssue(after.ID)
 }
 
 func (m *Model) ensureSelection() {
@@ -714,12 +672,14 @@ func (m *Model) prepareDetailsForIssue(issueID string) tea.Cmd {
 func (m *Model) setInspectedIssue(issue model.Issue) {
 	m.inspectedIssueID = issue.ID
 	m.inspectedIssue = issue
+	m.detailsScroll = 0
 }
 
 // clearInspectedIssue resets the explicit modal target.
 func (m *Model) clearInspectedIssue() {
 	m.inspectedIssueID = ""
 	m.inspectedIssue = model.Issue{}
+	m.detailsScroll = 0
 }
 
 // syncSelectionToInspectedIssue keeps board cursor state aligned with the modal target when possible.
@@ -1050,7 +1010,8 @@ func (m Model) renderDetails() string {
 	if issue == nil {
 		return ""
 	}
-	width := minInt(84, maxInt(minModalWidth, m.width-12))
+	width, boxHeight, bodyHeight := m.modalDimensions(true)
+	contentWidth := m.modalContentWidth(width)
 	details := m.currentIssueDetails()
 	columnLabel := lipgloss.NewStyle().
 		Padding(0, 2).
@@ -1058,6 +1019,43 @@ func (m Model) renderDetails() string {
 		Foreground(lipgloss.Color("230")).
 		Background(lipgloss.Color("60")).
 		Render(m.inspectedColumnTitle())
+	lines := m.wrapModalLines(m.detailsModalLines(*issue, details), contentWidth)
+	scroll := clampScrollOffset(m.detailsScroll, len(lines), bodyHeight)
+	visible := viewportLines(lines, scroll, bodyHeight)
+	box := lipgloss.NewStyle().
+		Width(width).
+		Height(bodyHeight).
+		Border(lipgloss.DoubleBorder()).
+		BorderForeground(lipgloss.Color("69")).
+		Padding(1, 2).
+		Background(lipgloss.Color("235")).
+		Render(strings.Join(visible, "\n"))
+	if boxHeight < modalFrameHeight {
+		return lipgloss.JoinVertical(lipgloss.Center, columnLabel, "", box)
+	}
+	return lipgloss.JoinVertical(lipgloss.Center, columnLabel, "", box)
+}
+
+func (m Model) renderEpicDetails() string {
+	width, _, bodyHeight := m.modalDimensions(false)
+	contentWidth := m.modalContentWidth(width)
+	wrapped := m.wrapModalLines(m.epicModalLines(), contentWidth)
+	scroll := clampScrollOffset(m.epicScroll, len(wrapped), bodyHeight)
+	visible := viewportLines(wrapped, scroll, bodyHeight)
+	box := lipgloss.NewStyle().
+		Width(width).
+		Height(bodyHeight).
+		Border(lipgloss.DoubleBorder()).
+		BorderForeground(lipgloss.Color("33")).
+		Padding(1, 2).
+		Background(lipgloss.Color("24")).
+		Foreground(lipgloss.Color("230")).
+		Render(strings.Join(visible, "\n"))
+	return box
+}
+
+// detailsModalLines builds the raw body content for the task details modal.
+func (m Model) detailsModalLines(issue model.Issue, details issueDetails) []string {
 	parentTitle := "None"
 	if issue.ParentID != nil {
 		parentTitle = m.catalog.EpicTitles[*issue.ParentID]
@@ -1080,57 +1078,12 @@ func (m Model) renderDetails() string {
 	case details.Err != nil:
 		lines = append(lines, fmt.Sprintf("Failed to load dependencies: %v", details.Err))
 	default:
-		lines = append(lines, m.renderIssueLinks("Blocked by", details.Dependencies, width)...)
+		lines = append(lines, m.renderIssueLinks("Blocked by", details.Dependencies)...)
 		lines = append(lines, "")
-		lines = append(lines, m.renderIssueLinks("Blocks", details.Dependents, width)...)
+		lines = append(lines, m.renderIssueLinks("Blocks", details.Dependents)...)
 	}
-	lines = append(lines,
-		"",
-		"Enter or Esc closes this view.",
-	)
-	box := lipgloss.NewStyle().
-		Width(width).
-		Border(lipgloss.DoubleBorder()).
-		BorderForeground(lipgloss.Color("69")).
-		Padding(1, 2).
-		Background(lipgloss.Color("235")).
-		Render(strings.Join(lines, "\n"))
-	return lipgloss.JoinVertical(lipgloss.Center, columnLabel, "", box)
-}
-
-func (m Model) renderEpicDetails() string {
-	width := minInt(84, maxInt(minModalWidth, m.width-12))
-	epic, reason := m.resolveInspectedEpic()
-	lines := []string{"Epic Details", ""}
-	if epic == nil {
-		lines = append(lines,
-			reason,
-			"",
-			"Tip: select an epic scope with Tab or e,",
-			"or highlight a task linked to an epic in All Epics.",
-		)
-	} else {
-		lines = append(lines,
-			epic.Title,
-			"",
-			fmt.Sprintf("ID: %s", epic.ID),
-			fmt.Sprintf("Type: %s", epic.Type),
-			fmt.Sprintf("Priority: P%d", epic.Priority),
-			fmt.Sprintf("Status: %s", epic.Status),
-			"",
-			epic.Description,
-		)
-	}
-	lines = append(lines, "", "Enter or Esc closes this view.")
-	box := lipgloss.NewStyle().
-		Width(width).
-		Border(lipgloss.DoubleBorder()).
-		BorderForeground(lipgloss.Color("33")).
-		Padding(1, 2).
-		Background(lipgloss.Color("24")).
-		Foreground(lipgloss.Color("230")).
-		Render(strings.Join(lines, "\n"))
-	return box
+	lines = append(lines, "", "Up/down scroll 5 lines when available. Left/right moves across columns. Enter, Esc, or q closes this view.")
+	return lines
 }
 
 // resolveInspectedEpic chooses which epic to render from the current board context.
@@ -1185,15 +1138,160 @@ func (m Model) overlay(base, modal string) string {
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
 }
 
-func (m Model) renderIssueLinks(title string, issues []model.Issue, width int) []string {
+func (m Model) renderIssueLinks(title string, issues []model.Issue) []string {
 	lines := []string{title + ":"}
 	if len(issues) == 0 {
 		return append(lines, "  None")
 	}
 	for _, issue := range issues {
-		lines = append(lines, "  - "+truncateLine(fmt.Sprintf("%s %s", issue.ID, issue.Title), width-8))
+		lines = append(lines, fmt.Sprintf("  - %s %s", issue.ID, issue.Title))
 	}
 	return lines
+}
+
+// modalDimensions returns a modal width plus total box and body heights that fit the viewport.
+func (m Model) modalDimensions(withLabel bool) (int, int, int) {
+	width := minInt(84, maxInt(minModalWidth, m.width-12))
+	if width > m.width {
+		width = m.width
+	}
+	labelHeight := 0
+	if withLabel {
+		labelHeight = 2
+	}
+	boxHeight := maxInt(1, m.height-4-labelHeight)
+	bodyHeight := maxInt(1, boxHeight-modalFrameHeight)
+	return width, boxHeight, bodyHeight
+}
+
+// modalContentWidth returns a safe wrap width for modal body content.
+func (m Model) modalContentWidth(boxWidth int) int {
+	return maxInt(1, boxWidth-6)
+}
+
+// wrapModalLines wraps raw modal lines to the available content width.
+func (m Model) wrapModalLines(lines []string, width int) []string {
+	wrapped := make([]string, 0, len(lines))
+	style := lipgloss.NewStyle().Width(width).MaxWidth(width)
+	for _, line := range lines {
+		if line == "" {
+			wrapped = append(wrapped, "")
+			continue
+		}
+		parts := strings.Split(style.Render(line), "\n")
+		wrapped = append(wrapped, parts...)
+	}
+	if len(wrapped) == 0 {
+		return []string{""}
+	}
+	return wrapped
+}
+
+// scrollDetails scrolls the details body when it overflows the available viewport.
+func (m *Model) scrollDetails(delta int) bool {
+	issue := m.inspectedIssueRef()
+	if issue == nil {
+		return false
+	}
+	_, _, bodyHeight := m.modalDimensions(true)
+	lines := m.wrapModalLines(m.detailsModalLines(*issue, m.currentIssueDetails()), m.modalContentWidth(m.modalDimensionsWidth()))
+	next := clampScrollOffset(m.detailsScroll+delta, len(lines), bodyHeight)
+	if next == m.detailsScroll {
+		return false
+	}
+	m.detailsScroll = next
+	return true
+}
+
+// scrollEpic scrolls the epic details body when it overflows the available viewport.
+func (m *Model) scrollEpic(delta int) bool {
+	_, _, bodyHeight := m.modalDimensions(false)
+	lines := m.wrapModalLines(m.epicModalLines(), m.modalContentWidth(m.modalDimensionsWidth()))
+	next := clampScrollOffset(m.epicScroll+delta, len(lines), bodyHeight)
+	if next == m.epicScroll {
+		return false
+	}
+	m.epicScroll = next
+	return true
+}
+
+// clampDetailsScroll keeps the details scroll offset within the rendered body bounds.
+func (m Model) clampDetailsScroll(offset int) int {
+	issue := m.inspectedIssueRef()
+	if issue == nil {
+		return 0
+	}
+	_, _, bodyHeight := m.modalDimensions(true)
+	lines := m.wrapModalLines(m.detailsModalLines(*issue, m.currentIssueDetails()), m.modalContentWidth(m.modalDimensionsWidth()))
+	return clampScrollOffset(offset, len(lines), bodyHeight)
+}
+
+// clampEpicScroll keeps the epic details scroll offset within the rendered body bounds.
+func (m Model) clampEpicScroll(offset int) int {
+	_, _, bodyHeight := m.modalDimensions(false)
+	lines := m.wrapModalLines(m.epicModalLines(), m.modalContentWidth(m.modalDimensionsWidth()))
+	return clampScrollOffset(offset, len(lines), bodyHeight)
+}
+
+// epicModalLines builds the raw body content for the epic details modal.
+func (m Model) epicModalLines() []string {
+	epic, reason := m.resolveInspectedEpic()
+	lines := []string{"Epic Details", ""}
+	if epic == nil {
+		lines = append(lines,
+			reason,
+			"",
+			"Tip: select an epic scope with Tab or e,",
+			"or highlight a task linked to an epic in All Epics.",
+		)
+	} else {
+		lines = append(lines,
+			epic.Title,
+			"",
+			fmt.Sprintf("ID: %s", epic.ID),
+			fmt.Sprintf("Type: %s", epic.Type),
+			fmt.Sprintf("Priority: P%d", epic.Priority),
+			fmt.Sprintf("Status: %s", epic.Status),
+			"",
+			epic.Description,
+		)
+	}
+	lines = append(lines, "", "Up/down scrolls 5 lines when available. Enter, Esc, or q closes this view.")
+	return lines
+}
+
+// modalDimensionsWidth returns the current computed modal width without caring about label usage.
+func (m Model) modalDimensionsWidth() int {
+	width, _, _ := m.modalDimensions(false)
+	return width
+}
+
+// viewportLines slices a wrapped line buffer to the visible window.
+func viewportLines(lines []string, offset, height int) []string {
+	if height < 1 {
+		return []string{""}
+	}
+	if len(lines) == 0 {
+		return []string{""}
+	}
+	start := clampScrollOffset(offset, len(lines), height)
+	end := minInt(len(lines), start+height)
+	return lines[start:end]
+}
+
+// clampScrollOffset caps a scroll offset to the visible line range.
+func clampScrollOffset(offset, lineCount, height int) int {
+	if height < 1 || lineCount <= height {
+		return 0
+	}
+	maxOffset := lineCount - height
+	if offset < 0 {
+		return 0
+	}
+	if offset > maxOffset {
+		return maxOffset
+	}
+	return offset
 }
 
 // boardHeightBudget returns the lines available for the board after header and footer.
