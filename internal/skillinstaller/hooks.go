@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // InstallHookConfigAtPath merges the faz SessionStart hook into a JSON config.
@@ -27,26 +26,6 @@ func InstallHookConfigAtPath(path string) (string, error) {
 		return "", fmt.Errorf("write hook config %s: %w", path, err)
 	}
 	return action, nil
-}
-
-// EnsureCodexHooksEnabled makes Codex load hook configuration files.
-func EnsureCodexHooksEnabled(path string) (string, string, error) {
-	existing, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return "", "", fmt.Errorf("read Codex config %s: %w", path, err)
-	}
-
-	updated, action := upsertCodexHooksFeature(string(existing))
-	if action == "unchanged" {
-		return path, action, nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return "", "", fmt.Errorf("create Codex config directory %s: %w", filepath.Dir(path), err)
-	}
-	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
-		return "", "", fmt.Errorf("write Codex config %s: %w", path, err)
-	}
-	return path, action, nil
 }
 
 // upsertHookConfig merges managed hooks with existing hook JSON without duplicates.
@@ -100,45 +79,6 @@ func hookConfigJSON() []byte {
 	}
 	encoded, _ := json.Marshal(config)
 	return encoded
-}
-
-// upsertCodexHooksFeature ensures [features].codex_hooks is true.
-func upsertCodexHooksFeature(content string) (string, string) {
-	lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
-	if len(lines) == 1 && lines[0] == "" {
-		return "[features]\ncodex_hooks = true\n", "created"
-	}
-
-	inFeatures := false
-	featuresIndex := -1
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
-			inFeatures = trimmed == "[features]"
-			if inFeatures {
-				featuresIndex = i
-			}
-			continue
-		}
-		if inFeatures && strings.HasPrefix(trimmed, "codex_hooks") {
-			if trimmed == "codex_hooks = true" {
-				return strings.Join(lines, "\n") + "\n", "unchanged"
-			}
-			lines[i] = "codex_hooks = true"
-			return strings.Join(lines, "\n") + "\n", "updated"
-		}
-	}
-
-	if featuresIndex >= 0 {
-		updated := append(lines[:featuresIndex+1], append([]string{"codex_hooks = true"}, lines[featuresIndex+1:]...)...)
-		return strings.Join(updated, "\n") + "\n", "updated"
-	}
-
-	base := strings.TrimRight(content, "\n\t ")
-	if base == "" {
-		return "[features]\ncodex_hooks = true\n", "created"
-	}
-	return base + "\n\n[features]\ncodex_hooks = true\n", "updated"
 }
 
 // mergeHookMaps merges hook arrays while preserving unrelated settings.

@@ -131,7 +131,6 @@ func TestInstallProviderCodexGlobalInstallsSkillContextAndHooks(t *testing.T) {
 	assertInstalledSharedSkill(t, filepath.Join(result.SkillPath, "SKILL.md"))
 	assertFileContains(t, result.ContextPath, contextBlockBegin)
 	assertFileContains(t, result.HookPath, sessionStartCommand)
-	assertFileContains(t, result.CodexConfigPath, "codex_hooks = true")
 	if result.ContextPath != filepath.Join(codexHome, "AGENTS.md") {
 		t.Fatalf("unexpected context path: %s", result.ContextPath)
 	}
@@ -229,22 +228,6 @@ func TestInstallHookConfigAtPathReportsInvalidJSON(t *testing.T) {
 	if !strings.Contains(err.Error(), "parse current hook config") {
 		t.Fatalf("unexpected error: %v", err)
 	}
-}
-
-func TestEnsureCodexHooksEnabledAddsFeatureFlag(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
-	if err := os.WriteFile(path, []byte("[model]\nname = \"gpt\"\n"), 0o644); err != nil {
-		t.Fatalf("seed config: %v", err)
-	}
-
-	_, action, err := EnsureCodexHooksEnabled(path)
-	if err != nil {
-		t.Fatalf("ensure hooks enabled: %v", err)
-	}
-	if action != "updated" {
-		t.Fatalf("expected updated action, got %q", action)
-	}
-	assertFileContains(t, path, "[features]\ncodex_hooks = true")
 }
 
 func assertInstalledSharedSkill(t *testing.T, skillPath string) {

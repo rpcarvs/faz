@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -37,7 +38,11 @@ var kanbanCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		defer watcher.Close()
+		defer func() {
+			if closeErr := watcher.Close(); closeErr != nil {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "close watcher: %v\n", closeErr)
+			}
+		}()
 		if err := watcher.Add(filepath.Join(projectDir, db.DirName)); err != nil {
 			return err
 		}

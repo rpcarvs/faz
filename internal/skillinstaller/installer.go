@@ -39,8 +39,6 @@ type InstallResult struct {
 	ContextAction       string
 	HookPath            string
 	HookAction          string
-	CodexConfigPath     string
-	CodexConfigAction   string
 	ClaudePointerPath   string
 	ClaudePointerAction string
 }
@@ -83,15 +81,6 @@ func InstallProvider(options InstallOptions) (InstallResult, error) {
 		ContextAction: contextAction,
 		HookPath:      hookPath,
 		HookAction:    hookAction,
-	}
-
-	if options.Provider == ProviderCodex {
-		configPath, action, err := EnsureCodexHooksEnabled(codexConfigPath(options))
-		if err != nil {
-			return InstallResult{}, err
-		}
-		result.CodexConfigPath = configPath
-		result.CodexConfigAction = action
 	}
 
 	if options.Provider == ProviderClaude && options.Local {
@@ -259,22 +248,6 @@ func hookConfigPath(options InstallOptions) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported install provider %q", options.Provider)
 	}
-}
-
-// codexConfigPath resolves the Codex config.toml path for hook feature flags.
-func codexConfigPath(options InstallOptions) string {
-	if options.Local {
-		return filepath.Join(options.LocalRoot, ".codex", "config.toml")
-	}
-	codexHome := os.Getenv("CODEX_HOME")
-	if codexHome == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return filepath.Join(".codex", "config.toml")
-		}
-		codexHome = filepath.Join(home, ".codex")
-	}
-	return filepath.Join(codexHome, "config.toml")
 }
 
 // writeFileIfChanged writes content and reports whether the file changed.

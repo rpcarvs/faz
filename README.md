@@ -52,7 +52,6 @@ Behavior:
 - Installs the `task-management-with-faz` skill.
 - Adds or updates the managed FAZ task-management context block.
 - Installs a SessionStart hook that runs `faz init && faz onboard` inside Git repositories.
-- For Codex, enables the `codex_hooks` feature in `config.toml`.
 - Prints all installed or updated paths.
 
 Use `--local` to install into the current Git repository instead of the global agent config:

@@ -23,7 +23,6 @@ func TestInstallCodexCommandInstallsGlobalIntegration(t *testing.T) {
 	assertPathExists(t, filepath.Join(codexHome, "skills", "task-management-with-faz", "SKILL.md"))
 	assertPathExists(t, filepath.Join(codexHome, "AGENTS.md"))
 	assertPathExists(t, filepath.Join(codexHome, "hooks.json"))
-	assertPathExists(t, filepath.Join(codexHome, "config.toml"))
 }
 
 // TestInstallClaudeLocalCommandUsesProjectRoot verifies local install paths.

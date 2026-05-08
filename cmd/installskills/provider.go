@@ -66,9 +66,6 @@ func printInstallResult(cmd *cobra.Command, provider string, local bool, result 
 	_, _ = fmt.Fprintf(out, "  Skill: %s\n", result.SkillPath)
 	_, _ = fmt.Fprintf(out, "  Context (%s): %s\n", result.ContextAction, result.ContextPath)
 	_, _ = fmt.Fprintf(out, "  Hook (%s): %s\n", result.HookAction, result.HookPath)
-	if result.CodexConfigPath != "" {
-		_, _ = fmt.Fprintf(out, "  Codex hooks (%s): %s\n", result.CodexConfigAction, result.CodexConfigPath)
-	}
 	if result.ClaudePointerPath != "" {
 		_, _ = fmt.Fprintf(out, "  Claude pointer (%s): %s\n", result.ClaudePointerAction, result.ClaudePointerPath)
 	}

@@ -73,11 +73,6 @@ func openService() (*service.IssueService, *sql.DB, error) {
 	return service.NewIssueService(issueRepo, projectName), sqlDB, nil
 }
 
-// stdoutPrint writes plain command output to stdout.
-func stdoutPrint(cmd *cobra.Command, args ...any) {
-	_, _ = fmt.Fprint(cmd.OutOrStdout(), args...)
-}
-
 // stdoutPrintln writes line-oriented command output to stdout.
 func stdoutPrintln(cmd *cobra.Command, args ...any) {
 	_, _ = fmt.Fprintln(cmd.OutOrStdout(), args...)
