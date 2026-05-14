@@ -1,8 +1,7 @@
 # faz
 
 `faz` is a lightweight local task tracker for agent workflows.
-It uses Go + Cobra for the CLI and SQLite for issue storage and graph relations.
-It is inspired by [Beads](https://github.com/steveyegge/beads).
+It uses Go + Cobra for the CLI and SQLite for issue storage with graph-like task relationships.
 
 ## Why faz
 
