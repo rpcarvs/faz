@@ -3,6 +3,7 @@ package kanban
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -21,6 +22,11 @@ const (
 	modalFrameHeight    = 4
 	modalScrollStep     = 5
 	footerGap           = " • "
+
+	// refreshFallbackInterval bounds catalog staleness when the fsnotify
+	// watcher is throttled (e.g. macOS App Nap on an unfocused terminal)
+	// or drops events under bursty SQLite-WAL writes.
+	refreshFallbackInterval = 2 * time.Second
 )
 
 var typeFilterOptions = []string{"all", "task", "bug", "feature", "chore", "decision"}
@@ -56,6 +62,7 @@ type detailsLoadedMsg struct {
 
 type dbChangedMsg struct{}
 type watchErrMsg struct{ err error }
+type tickMsg struct{}
 
 // issueDetails holds dependency context for the kanban detail modal.
 type issueDetails struct {
@@ -123,7 +130,7 @@ func NewModel(svc Service, opts ...Option) Model {
 
 // Init starts the first data load and listens for database changes.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.loadCatalogCmd(), m.watchCmd())
+	return tea.Batch(m.loadCatalogCmd(), m.watchCmd(), m.tickCmd())
 }
 
 // Update handles input, resizing, refreshes, and modal state transitions.
@@ -168,6 +175,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case watchErrMsg:
 		m.err = msg.err
 		return m, m.watchCmd()
+
+	case tickMsg:
+		return m, tea.Batch(m.loadCatalogCmd(), m.tickCmd())
 
 	case tea.KeyMsg:
 		if m.showDetails {
@@ -729,6 +739,10 @@ func (m Model) watchCmd() tea.Cmd {
 			return watchErrMsg{err: err}
 		}
 	}
+}
+
+func (m Model) tickCmd() tea.Cmd {
+	return tea.Tick(refreshFallbackInterval, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
 func (m Model) renderHeader() string {
