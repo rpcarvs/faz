@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/rpcarvs/faz/internal/model"
+	"github.com/rpcarvs/faz/internal/service"
 	"github.com/spf13/cobra"
 )
 
@@ -12,6 +13,8 @@ var (
 	createPriority    int
 	createDescription string
 	createParent      string
+	createPlan        string
+	createWork        string
 )
 
 var createCmd = &cobra.Command{
@@ -40,6 +43,21 @@ var createCmd = &cobra.Command{
 			}
 			parentID = &normalizedParent[0]
 		}
+		var planID *string
+		if cmd.Flags().Changed("plan") {
+			projectDir, err := currentProjectDir()
+			if err != nil {
+				return err
+			}
+			if err := service.ValidatePlanTarget(projectDir, createPlan); err != nil {
+				return err
+			}
+			planID = &createPlan
+		}
+		var workID *string
+		if cmd.Flags().Changed("work") {
+			workID = &createWork
+		}
 
 		id, err := svc.Create(model.Issue{
 			Title:       args[0],
@@ -48,6 +66,8 @@ var createCmd = &cobra.Command{
 			Priority:    createPriority,
 			Status:      "open",
 			ParentID:    parentID,
+			PlanID:      planID,
+			WorkID:      workID,
 		})
 		if err != nil {
 			return err
@@ -71,5 +91,7 @@ func init() {
 	createCmd.Flags().IntVar(&createPriority, "priority", 2, "Issue priority (0-3)")
 	createCmd.Flags().StringVar(&createDescription, "description", "", "Issue description")
 	createCmd.Flags().StringVar(&createParent, "parent", "", "Parent issue ID")
+	createCmd.Flags().StringVar(&createPlan, "plan", "", "Associate with an SDD plan document")
+	createCmd.Flags().StringVar(&createWork, "work", "", "Associate with an SDD work outcome")
 	rootCmd.AddCommand(createCmd)
 }

@@ -26,7 +26,8 @@ const (
 )
 
 const issueSelectColumns = `i.id, i.public_id, i.title, i.description, i.type, i.priority, i.status,
-	       i.claimed_at, i.claim_expires_at, i.parent_id, p.public_id, i.created_at, i.updated_at, i.closed_at`
+	       i.claimed_at, i.claim_expires_at, i.parent_id, p.public_id, i.plan_id, i.work_id,
+	       i.created_at, i.updated_at, i.closed_at`
 
 // NewIssueRepo builds a repository backed by sqlite.
 func NewIssueRepo(db *sql.DB) *IssueRepo {
@@ -45,8 +46,8 @@ func (r *IssueRepo) CreateIssue(issue model.Issue) (string, error) {
 	}
 
 	_, err := r.execWithRetry(
-		`INSERT INTO issues(public_id, title, description, type, priority, status, parent_id)
-			 VALUES(?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO issues(public_id, title, description, type, priority, status, parent_id, plan_id, work_id)
+			 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		issue.ID,
 		issue.Title,
 		issue.Description,
@@ -54,6 +55,8 @@ func (r *IssueRepo) CreateIssue(issue model.Issue) (string, error) {
 		issue.Priority,
 		issue.Status,
 		parentInternalID,
+		issue.PlanID,
+		issue.WorkID,
 	)
 	if err != nil {
 		return "", fmt.Errorf("insert issue: %w", err)
@@ -82,6 +85,8 @@ func (r *IssueRepo) GetIssue(publicID string) (model.Issue, error) {
 			&issue.ClaimExpiresAt,
 			&issue.ParentInternal,
 			&issue.ParentID,
+			&issue.PlanID,
+			&issue.WorkID,
 			&issue.CreatedAt,
 			&issue.UpdatedAt,
 			&issue.ClosedAt,
@@ -225,6 +230,14 @@ func (r *IssueRepo) ListIssues(filter model.ListFilter) ([]model.Issue, error) {
 	if filter.ParentID != "" {
 		where = append(where, "p.public_id = ?")
 		args = append(args, filter.ParentID)
+	}
+	if filter.PlanID != "" {
+		where = append(where, "i.plan_id = ?")
+		args = append(args, filter.PlanID)
+	}
+	if filter.WorkID != "" {
+		where = append(where, "i.work_id = ?")
+		args = append(args, filter.WorkID)
 	}
 
 	if len(where) > 0 {
@@ -489,6 +502,8 @@ func scanIssues(rows *sql.Rows) ([]model.Issue, error) {
 			&issue.ClaimExpiresAt,
 			&issue.ParentInternal,
 			&issue.ParentID,
+			&issue.PlanID,
+			&issue.WorkID,
 			&issue.CreatedAt,
 			&issue.UpdatedAt,
 			&issue.ClosedAt,

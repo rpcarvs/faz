@@ -10,6 +10,125 @@ import (
 	"github.com/rpcarvs/faz/internal/model"
 )
 
+func stringPtr(value string) *string {
+	return &value
+}
+
+// TestIssueAssociationsRoundTripAcrossRepositoryPaths verifies optional associations across every issue reader.
+func TestIssueAssociationsRoundTripAcrossRepositoryPaths(t *testing.T) {
+	projectDir := t.TempDir()
+	dbPath, err := db.EnsureProjectFiles(projectDir)
+	if err != nil {
+		t.Fatalf("ensure project files: %v", err)
+	}
+
+	sqlDB, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer func() { _ = sqlDB.Close() }()
+	if err := db.Migrate(sqlDB); err != nil {
+		t.Fatalf("migrate db: %v", err)
+	}
+
+	repo := NewIssueRepo(sqlDB)
+	planID := stringPtr("PLAN01")
+	workID := stringPtr("W01")
+	issues := []model.Issue{
+		{ID: "faz-sdd1", Title: "Epic", Type: "epic", Priority: 1, Status: "open", PlanID: planID, WorkID: workID},
+		{ID: "faz-sdd1.0", Title: "Task", Type: "task", Priority: 1, Status: "open", ParentID: stringPtr("faz-sdd1"), PlanID: planID, WorkID: workID},
+		{ID: "faz-sdd2", Title: "Bug", Type: "bug", Priority: 1, Status: "open", PlanID: planID, WorkID: workID},
+		{ID: "faz-sdd3", Title: "Feature", Type: "feature", Priority: 1, Status: "open", PlanID: planID, WorkID: workID},
+		{ID: "faz-sdd4", Title: "Chore", Type: "chore", Priority: 1, Status: "open", PlanID: planID, WorkID: workID},
+		{ID: "faz-sdd5", Title: "Decision", Type: "decision", Priority: 1, Status: "open", PlanID: planID, WorkID: workID},
+	}
+	for _, issue := range issues {
+		if _, err := repo.CreateIssue(issue); err != nil {
+			t.Fatalf("create %s: %v", issue.Type, err)
+		}
+	}
+	if err := repo.AddDependency("faz-sdd1.0", "faz-sdd2"); err != nil {
+		t.Fatalf("add dependency: %v", err)
+	}
+
+	loaded, err := repo.GetIssue("faz-sdd1.0")
+	if err != nil {
+		t.Fatalf("get child: %v", err)
+	}
+	if loaded.PlanID == nil || *loaded.PlanID != "PLAN01" || loaded.WorkID == nil || *loaded.WorkID != "W01" {
+		t.Fatalf("get associations = (%v, %v), want (PLAN01, W01)", loaded.PlanID, loaded.WorkID)
+	}
+
+	children, err := repo.ListChildren("faz-sdd1")
+	if err != nil || len(children) != 1 || children[0].PlanID == nil || *children[0].PlanID != "PLAN01" {
+		t.Fatalf("list children = %#v, %v", children, err)
+	}
+	dependencies, err := repo.ListDependencies("faz-sdd1.0")
+	if err != nil || len(dependencies) != 1 || dependencies[0].WorkID == nil || *dependencies[0].WorkID != "W01" {
+		t.Fatalf("list dependencies = %#v, %v", dependencies, err)
+	}
+	dependents, err := repo.ListDependents("faz-sdd2")
+	if err != nil || len(dependents) != 1 || dependents[0].PlanID == nil || *dependents[0].PlanID != "PLAN01" {
+		t.Fatalf("list dependents = %#v, %v", dependents, err)
+	}
+
+	listed, err := repo.ListIssues(model.ListFilter{PlanID: "PLAN01", WorkID: "W01"})
+	if err != nil || len(listed) != len(issues) {
+		t.Fatalf("list matching associations returned %d issues, err=%v", len(listed), err)
+	}
+	if exact, err := repo.ListIssues(model.ListFilter{PlanID: "PLAN01", WorkID: "W1"}); err != nil || len(exact) != 0 {
+		t.Fatalf("exact work filter returned %d issues, err=%v", len(exact), err)
+	}
+
+	if err := repo.UpdateIssue("faz-sdd3", map[string]any{"plan_id": "PLAN02", "work_id": "W02"}); err != nil {
+		t.Fatalf("update associations: %v", err)
+	}
+	updated, err := repo.GetIssue("faz-sdd3")
+	if err != nil || updated.PlanID == nil || *updated.PlanID != "PLAN02" || updated.WorkID == nil || *updated.WorkID != "W02" {
+		t.Fatalf("updated associations = %#v, err=%v", updated, err)
+	}
+
+	if err := repo.CloseIssue("faz-sdd2"); err != nil {
+		t.Fatalf("close associated issue: %v", err)
+	}
+	completed, err := repo.RecentCompleted(1)
+	if err != nil || len(completed) != 1 || completed[0].PlanID == nil || *completed[0].PlanID != "PLAN01" {
+		t.Fatalf("recent completed = %#v, %v", completed, err)
+	}
+	ready, err := repo.ReadyIssues()
+	if err != nil {
+		t.Fatalf("ready issues: %v", err)
+	}
+	foundReadyChild := false
+	for _, issue := range ready {
+		if issue.ID == "faz-sdd1.0" && (issue.PlanID == nil || *issue.PlanID != "PLAN01" || issue.WorkID == nil || *issue.WorkID != "W01") {
+			t.Fatalf("ready issue lost associations: %#v", issue)
+		}
+		if issue.ID == "faz-sdd1.0" {
+			foundReadyChild = true
+		}
+	}
+	if !foundReadyChild {
+		t.Fatalf("ready issues did not include unblocked child")
+	}
+	filteredOpen, err := repo.ListIssues(model.ListFilter{PlanID: "PLAN01", WorkID: "W01"})
+	if err != nil || len(filteredOpen) != len(issues)-2 {
+		t.Fatalf("open matching associations returned %d issues, err=%v", len(filteredOpen), err)
+	}
+
+	all, err := repo.ListIssues(model.ListFilter{PlanID: "PLAN01", WorkID: "W01", All: true})
+	if err != nil || len(all) != len(issues)-1 {
+		t.Fatalf("all matching associations returned %d issues, err=%v", len(all), err)
+	}
+	if err := repo.UpdateIssue("faz-sdd3", map[string]any{"plan_id": nil, "work_id": nil}); err != nil {
+		t.Fatalf("clear associations: %v", err)
+	}
+	cleared, err := repo.GetIssue("faz-sdd3")
+	if err != nil || cleared.PlanID != nil || cleared.WorkID != nil {
+		t.Fatalf("cleared associations = %#v, err=%v", cleared, err)
+	}
+}
+
 func TestReadyIssuesRespectsOpenBlockers(t *testing.T) {
 	projectDir := t.TempDir()
 	dbPath, err := db.EnsureProjectFiles(projectDir)

@@ -72,7 +72,7 @@ func Open(dbPath string) (*sql.DB, error) {
 	return nil, fmt.Errorf("open sqlite database failed after %d attempts", maxOpenAttempts)
 }
 
-// OpenProjectDB opens a project database and errors if init has not been run.
+// OpenProjectDB opens and upgrades existing storage, returning an error if init has not been run.
 func OpenProjectDB(projectDir string) (*sql.DB, string, error) {
 	dbPath := filepath.Join(projectDir, DirName, DBFileName)
 	if _, err := os.Stat(dbPath); errors.Is(err, os.ErrNotExist) {
@@ -81,6 +81,10 @@ func OpenProjectDB(projectDir string) (*sql.DB, string, error) {
 
 	db, err := Open(dbPath)
 	if err != nil {
+		return nil, "", err
+	}
+	if err := Migrate(db); err != nil {
+		_ = db.Close()
 		return nil, "", err
 	}
 

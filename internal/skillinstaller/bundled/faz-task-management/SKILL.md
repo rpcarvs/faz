@@ -1,9 +1,9 @@
 ---
-name: task-management-with-faz
+name: faz-task-management
 description: Enforce faz task tracking for all work. Use when starting sessions, planning or executing features, fixing bugs, refactoring, researching, analyzing, or any workflow where you need to work.
 ---
 
-# Task Management with faz
+# Faz Task Management
 
 ## Core Rule
 
@@ -11,6 +11,8 @@ No work without a claimed faz task.
 
 - Run `faz claim <id>` successfully before action.
 - Add meaningful and rich descriptions for the tasks so other agents will know precisely what needs to be done by just reading the task.
+
+An explicitly invoked document-first workflow may draft or reconcile documents before it creates an implementation task graph. It must wait for documented scope approval before creating implementation issues, prepare ready work, and stop. A separate human implementation instruction is still required before claiming or coding. This exception does not add a document workflow to ordinary Faz sessions.
 
 ## Required Lifecycle
 
@@ -42,9 +44,9 @@ Follow this lifecycle in order for every coding session.
 
 - Tasks MUST be atomic units! Do not aggregate a lot of work into a task. Remember, atomic tasks!
 - Add rich descriptions to the atomic tasks so ANY other Coding Agent or Human will understand know what to do!
-- You first must created ALL the necessary epics and children before start working.
+- You first must create the necessary epics and children before implementation work begins. An explicitly invoked document-first workflow may defer this until its documents are approved.
 - Set blockers ALWAYS! You must be explicitly when a task is being blocked by another task. That is non-negotiable. Use `faz dep` to manage blockers.
-- After ALL this is done, communicate to the user and wait for approval.
+- After all this is done, communicate to the user and wait for approval unless the user has already approved the relevant scope and explicitly instructed implementation.
 
 Example Case: User asks you ti develop a tool.
  - Given the request, you see may create 1 epic with topic A. It requires 3 atomic tasks.
@@ -120,4 +122,3 @@ If spawning subagents that will also work, include this skill text and assign ea
 - If a faz command fails, correct syntax and retry.
 - Use `faz <command> --help` only after a failure.
 - Use `faz recap` for quick command reminders.
-

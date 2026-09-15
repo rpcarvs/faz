@@ -13,6 +13,8 @@ type Issue struct {
 	ClaimedAt      *time.Time
 	ClaimExpiresAt *time.Time
 	ParentID       *string
+	PlanID         *string
+	WorkID         *string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	ClosedAt       *time.Time
@@ -26,5 +28,7 @@ type ListFilter struct {
 	Status   string
 	Priority *int
 	ParentID string
+	PlanID   string
+	WorkID   string
 	All      bool
 }

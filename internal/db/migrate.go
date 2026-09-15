@@ -1,14 +1,51 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 )
 
 // Migrate creates and updates required tables for the faz database.
 func Migrate(db *sql.DB) error {
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire migration connection: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
+		return fmt.Errorf("enable migration foreign keys: %w", err)
+	}
+
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		return fmt.Errorf("begin migration: %w", err)
+	}
+	transactionOpen := true
+	defer func() {
+		if transactionOpen {
+			_, _ = conn.ExecContext(ctx, `ROLLBACK`)
+		}
+	}()
+	if err := migrateConnection(ctx, conn); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
+		return fmt.Errorf("commit migration: %w", err)
+	}
+	transactionOpen = false
+	return nil
+}
+
+// migrationExecutor is the single pinned connection used for a migration transaction.
+type migrationExecutor interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
+// migrateConnection applies all schema changes while a SQLite immediate transaction prevents concurrent upgrades.
+func migrateConnection(ctx context.Context, db migrationExecutor) error {
 	statements := []string{
-		`PRAGMA foreign_keys = ON;`,
 		`CREATE TABLE IF NOT EXISTS issues (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			public_id TEXT UNIQUE,
@@ -20,6 +57,8 @@ func Migrate(db *sql.DB) error {
 			claimed_at DATETIME,
 			claim_expires_at DATETIME,
 			parent_id INTEGER,
+			plan_id TEXT,
+			work_id TEXT,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			closed_at DATETIME,
@@ -45,16 +84,16 @@ func Migrate(db *sql.DB) error {
 	}
 
 	for _, stmt := range statements {
-		if _, err := db.Exec(stmt); err != nil {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("run migration statement: %w", err)
 		}
 	}
 
-	if err := ensureIssuesColumns(db); err != nil {
+	if err := ensureIssuesColumns(ctx, db); err != nil {
 		return err
 	}
 
-	if _, err := db.Exec(`UPDATE issues SET public_id = 'legacy-' || id WHERE public_id IS NULL OR public_id = ''`); err != nil {
+	if _, err := db.ExecContext(ctx, `UPDATE issues SET public_id = 'legacy-' || id WHERE public_id IS NULL OR public_id = ''`); err != nil {
 		return fmt.Errorf("backfill public IDs: %w", err)
 	}
 
@@ -62,8 +101,8 @@ func Migrate(db *sql.DB) error {
 }
 
 // ensureIssuesColumns adds missing issues columns and indexes for upgrades.
-func ensureIssuesColumns(db *sql.DB) error {
-	rows, err := db.Query(`PRAGMA table_info(issues);`)
+func ensureIssuesColumns(ctx context.Context, db migrationExecutor) error {
+	rows, err := db.QueryContext(ctx, `PRAGMA table_info(issues);`)
 	if err != nil {
 		return fmt.Errorf("inspect issues table columns: %w", err)
 	}
@@ -72,6 +111,8 @@ func ensureIssuesColumns(db *sql.DB) error {
 	hasPublicID := false
 	hasClaimedAt := false
 	hasClaimExpiresAt := false
+	hasPlanID := false
+	hasWorkID := false
 	for rows.Next() {
 		var cid int
 		var name string
@@ -91,35 +132,57 @@ func ensureIssuesColumns(db *sql.DB) error {
 		if name == "claim_expires_at" {
 			hasClaimExpiresAt = true
 		}
+		if name == "plan_id" {
+			hasPlanID = true
+		}
+		if name == "work_id" {
+			hasWorkID = true
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("iterate issues table metadata: %w", err)
 	}
 
 	if !hasPublicID {
-		if _, err := db.Exec(`ALTER TABLE issues ADD COLUMN public_id TEXT`); err != nil {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE issues ADD COLUMN public_id TEXT`); err != nil {
 			return fmt.Errorf("add public_id column: %w", err)
 		}
 	}
 	if !hasClaimedAt {
-		if _, err := db.Exec(`ALTER TABLE issues ADD COLUMN claimed_at DATETIME`); err != nil {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE issues ADD COLUMN claimed_at DATETIME`); err != nil {
 			return fmt.Errorf("add claimed_at column: %w", err)
 		}
 	}
 	if !hasClaimExpiresAt {
-		if _, err := db.Exec(`ALTER TABLE issues ADD COLUMN claim_expires_at DATETIME`); err != nil {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE issues ADD COLUMN claim_expires_at DATETIME`); err != nil {
 			return fmt.Errorf("add claim_expires_at column: %w", err)
 		}
 	}
+	if !hasPlanID {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE issues ADD COLUMN plan_id TEXT`); err != nil {
+			return fmt.Errorf("add plan_id column: %w", err)
+		}
+	}
+	if !hasWorkID {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE issues ADD COLUMN work_id TEXT`); err != nil {
+			return fmt.Errorf("add work_id column: %w", err)
+		}
+	}
 
-	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_issues_public_id_unique ON issues(public_id)`); err != nil {
+	if _, err := db.ExecContext(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS idx_issues_public_id_unique ON issues(public_id)`); err != nil {
 		return fmt.Errorf("create unique public_id index: %w", err)
 	}
-	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_issues_public_id`); err != nil {
+	if _, err := db.ExecContext(ctx, `DROP INDEX IF EXISTS idx_issues_public_id`); err != nil {
 		return fmt.Errorf("drop redundant public_id index: %w", err)
 	}
-	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_issues_claim_expires_at ON issues(claim_expires_at)`); err != nil {
+	if _, err := db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_issues_claim_expires_at ON issues(claim_expires_at)`); err != nil {
 		return fmt.Errorf("create claim_expires_at index: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_issues_work_id ON issues(work_id)`); err != nil {
+		return fmt.Errorf("create work_id index: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_issues_plan_work_id ON issues(plan_id, work_id)`); err != nil {
+		return fmt.Errorf("create plan/work index: %w", err)
 	}
 
 	return nil

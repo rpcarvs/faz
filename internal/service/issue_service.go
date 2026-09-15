@@ -74,6 +74,19 @@ func (s *IssueService) Create(issue model.Issue) (string, error) {
 	if issue.Priority < 0 || issue.Priority > 3 {
 		return "", fmt.Errorf("priority must be between 0 and 3")
 	}
+	if issue.ParentID != nil {
+		parentID, err := NormalizeIssueID(*issue.ParentID)
+		if err != nil {
+			return "", err
+		}
+		issue.ParentID = &parentID
+	}
+	if err := validateIssueAssociations(issue.PlanID, issue.WorkID); err != nil {
+		return "", err
+	}
+	if err := s.inheritParentAssociations(&issue); err != nil {
+		return "", err
+	}
 
 	var lastRetryErr error
 	for attempt := 0; attempt < maxCreateAttempts; attempt++ {
@@ -137,6 +150,18 @@ func (s *IssueService) Update(publicID string, fields map[string]any) error {
 			clean[key] = priority
 		case "parent_public_id":
 			clean[key] = value
+		case "plan_id":
+			association, err := associationUpdateValue("plan ID", value, validatePlanID)
+			if err != nil {
+				return err
+			}
+			clean[key] = association
+		case "work_id":
+			association, err := associationUpdateValue("work ID", value, validateWorkID)
+			if err != nil {
+				return err
+			}
+			clean[key] = association
 		default:
 			return fmt.Errorf("unsupported field %q", key)
 		}
@@ -201,6 +226,16 @@ func (s *IssueService) List(filter model.ListFilter) ([]model.Issue, error) {
 	}
 	if filter.ParentID != "" {
 		if _, err := NormalizeIssueID(filter.ParentID); err != nil {
+			return nil, err
+		}
+	}
+	if filter.PlanID != "" {
+		if err := validatePlanID(filter.PlanID); err != nil {
+			return nil, err
+		}
+	}
+	if filter.WorkID != "" {
+		if err := validateWorkID(filter.WorkID); err != nil {
 			return nil, err
 		}
 	}

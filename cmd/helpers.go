@@ -131,11 +131,22 @@ func printIssueReminder(writer io.Writer, issue model.Issue) {
 	if issue.ParentID != nil {
 		_, _ = fmt.Fprintf(writer, "  Parent: %s\n", *issue.ParentID)
 	}
+	printIssueSDDAssociations(writer, issue)
 	if description := strings.TrimSpace(issue.Description); description != "" {
 		_, _ = fmt.Fprintln(writer, "  Description:")
 		for _, line := range strings.Split(description, "\n") {
 			_, _ = fmt.Fprintf(writer, "    %s\n", line)
 		}
+	}
+}
+
+// printIssueSDDAssociations writes populated SDD context without changing unlinked issue output.
+func printIssueSDDAssociations(writer io.Writer, issue model.Issue) {
+	if issue.PlanID != nil && strings.TrimSpace(*issue.PlanID) != "" {
+		_, _ = fmt.Fprintf(writer, "  SDD Plan: %s (faz-specs/%s.md)\n", *issue.PlanID, *issue.PlanID)
+	}
+	if issue.WorkID != nil && strings.TrimSpace(*issue.WorkID) != "" {
+		_, _ = fmt.Fprintf(writer, "  SDD Work: %s\n", *issue.WorkID)
 	}
 }
 

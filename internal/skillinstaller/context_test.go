@@ -38,6 +38,41 @@ func TestInstallCodexContextAppendsManagedBlock(t *testing.T) {
 	}
 }
 
+// TestManagedContextUsesTaskSkillName preserves the managed-block identity during renames.
+func TestManagedContextUsesTaskSkillName(t *testing.T) {
+	content, _ := upsertContextBlock("")
+	for _, expected := range []string{
+		"<!-- FAZ-TASK-MANAGEMENT:BEGIN -->",
+		"<!-- FAZ-TASK-MANAGEMENT:END -->",
+		"`faz-task-management` SKILL",
+	} {
+		if strings.Count(content, expected) != 1 {
+			t.Fatalf("expected one %q in managed context:\n%s", expected, content)
+		}
+	}
+}
+
+func TestManagedContextKeepsDocumentWorkflowExceptionNarrow(t *testing.T) {
+	content, _ := upsertContextBlock("")
+	if !strings.Contains(content, "explicitly invoked document-first workflow") {
+		t.Fatalf("missing narrow document-first exception:\n%s", content)
+	}
+	if !strings.Contains(content, "stop before implementation") {
+		t.Fatalf("document-first exception must stop before implementation:\n%s", content)
+	}
+	for _, forbidden := range []string{"--plan", "--work", "SDD query", "PLAN01"} {
+		if strings.Contains(content, forbidden) {
+			t.Fatalf("ordinary context must not contain %q:\n%s", forbidden, content)
+		}
+	}
+}
+
+func TestManagedContextHonorsApprovedImplementation(t *testing.T) {
+	if !strings.Contains(mandatoryContextBody, "already approved the relevant scope and explicitly instructed implementation") {
+		t.Fatalf("missing approved implementation exception:\n%s", mandatoryContextBody)
+	}
+}
+
 func TestInstallContextAtPathUpdatesWhenBlockExists(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "AGENTS.md")

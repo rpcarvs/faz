@@ -3,18 +3,32 @@ package skillinstaller
 import (
 	"embed"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
-const skillDirName = "task-management-with-faz"
-const bundledSkillPath = "bundled/task-management-with-faz/SKILL.md"
+const taskManagementSkillDirName = "faz-task-management"
+const specDrivenSkillDirName = "faz-spec-driven"
+const skillDirName = taskManagementSkillDirName
+const bundledSkillPath = "bundled/faz-task-management/SKILL.md"
 const sessionStartCommand = "git rev-parse --show-toplevel >/dev/null 2>&1 && faz init && faz onboard"
 
 // bundledFiles contains built-in skill files to install for supported tools.
 //
-//go:embed bundled/task-management-with-faz/SKILL.md
+//go:embed bundled/faz-task-management/SKILL.md bundled/faz-spec-driven
 var bundledFiles embed.FS
+
+type bundledSkill struct {
+	directory string
+	root      string
+}
+
+var bundledSkills = []bundledSkill{
+	{directory: taskManagementSkillDirName, root: "bundled/faz-task-management"},
+	{directory: specDrivenSkillDirName, root: "bundled/faz-spec-driven"},
+}
 
 type Provider string
 
@@ -33,7 +47,9 @@ type InstallOptions struct {
 
 // InstallResult reports all paths touched by a provider install.
 type InstallResult struct {
+	// SkillPath is retained for compatibility and identifies the task-management skill.
 	SkillPath           string
+	SkillPaths          []string
 	ContextPath         string
 	ContextAction       string
 	HookPath            string
@@ -61,7 +77,7 @@ func InstallProvider(options InstallOptions) (InstallResult, error) {
 		return InstallResult{}, err
 	}
 
-	skillPath, err := installBundledSkill(skillRoot, options.Force)
+	skillPaths, err := installBundledSkills(skillRoot, options.Provider, options.Force)
 	if err != nil {
 		return InstallResult{}, err
 	}
@@ -75,7 +91,11 @@ func InstallProvider(options InstallOptions) (InstallResult, error) {
 	}
 
 	result := InstallResult{
-		SkillPath:     skillPath,
+		SkillPath: skillPaths[taskManagementSkillDirName],
+		SkillPaths: []string{
+			skillPaths[taskManagementSkillDirName],
+			skillPaths[specDrivenSkillDirName],
+		},
 		ContextPath:   contextPath,
 		ContextAction: contextAction,
 		HookPath:      hookPath,
@@ -101,7 +121,7 @@ func InstallCodexSkill(force bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return installBundledSkill(root, force)
+	return installBundledSkill(root, bundledSkills[0], ProviderCodex, force)
 }
 
 // InstallClaudeSkill installs the bundled faz skill into Claude skills directory.
@@ -110,7 +130,7 @@ func InstallClaudeSkill(force bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return installBundledSkill(root, force)
+	return installBundledSkill(root, bundledSkills[0], ProviderClaude, force)
 }
 
 // codexSkillsRoot resolves the target Codex skills root directory.
@@ -135,31 +155,144 @@ func claudeSkillsRoot() (string, error) {
 	return filepath.Join(home, ".claude", "skills"), nil
 }
 
-// installBundledSkill writes embedded skill files into the destination directory.
-func installBundledSkill(root string, force bool) (string, error) {
-	target := filepath.Join(root, skillDirName)
+// installBundledSkills writes all bundled skills and returns their target directories.
+func installBundledSkills(root string, provider Provider, force bool) (map[string]string, error) {
+	for _, skill := range bundledSkills {
+		if err := rejectSymlink(filepath.Join(root, skill.directory)); err != nil {
+			return nil, err
+		}
+	}
+
+	paths := make(map[string]string, len(bundledSkills))
+	for _, skill := range bundledSkills {
+		path, err := installBundledSkill(root, skill, provider, force)
+		if err != nil {
+			return nil, err
+		}
+		paths[skill.directory] = path
+	}
+	return paths, nil
+}
+
+// installBundledSkill writes one embedded skill and its provider-specific files.
+func installBundledSkill(root string, skill bundledSkill, provider Provider, force bool) (string, error) {
+	target := filepath.Join(root, skill.directory)
 	if err := ensureSkillTarget(target, force); err != nil {
 		return "", err
 	}
 
-	content, err := bundledFiles.ReadFile(bundledSkillPath)
+	err := fs.WalkDir(bundledFiles, skill.root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || !shouldInstallBundledFile(provider, skill, path) {
+			return nil
+		}
+
+		relativePath, err := filepath.Rel(skill.root, path)
+		if err != nil {
+			return fmt.Errorf("resolve bundled skill path: %w", err)
+		}
+		content, err := bundledFiles.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read bundled skill file %s: %w", path, err)
+		}
+		if provider == ProviderClaude && skill.directory == specDrivenSkillDirName && relativePath == "SKILL.md" {
+			content, err = claudeSkillContent(content)
+			if err != nil {
+				return err
+			}
+		}
+
+		destination := filepath.Join(target, filepath.FromSlash(relativePath))
+		if err := ensureBundledDirectory(target, filepath.Dir(destination)); err != nil {
+			return err
+		}
+		if err := rejectSymlink(destination); err != nil {
+			return err
+		}
+		if err := os.WriteFile(destination, content, 0o644); err != nil {
+			return fmt.Errorf("write bundled skill file %s: %w", destination, err)
+		}
+		return nil
+	})
 	if err != nil {
-		return "", fmt.Errorf("read bundled skill: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(target, "SKILL.md"), content, 0o644); err != nil {
-		return "", fmt.Errorf("write bundled skill: %w", err)
+		return "", err
 	}
 
 	return target, nil
 }
 
+// ensureBundledDirectory creates a destination directory without traversing symlinks.
+func ensureBundledDirectory(root, directory string) error {
+	relativePath, err := filepath.Rel(root, directory)
+	if err != nil {
+		return fmt.Errorf("resolve bundled skill directory: %w", err)
+	}
+	if relativePath == "." {
+		return nil
+	}
+
+	current := root
+	for _, component := range strings.Split(relativePath, string(filepath.Separator)) {
+		current = filepath.Join(current, component)
+		info, err := os.Lstat(current)
+		if os.IsNotExist(err) {
+			if err := os.Mkdir(current, 0o755); err != nil {
+				return fmt.Errorf("create bundled skill directory %s: %w", current, err)
+			}
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("check bundled skill directory %s: %w", current, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return fmt.Errorf("bundled skill directory %s must be a directory, not a symlink", current)
+		}
+	}
+	return nil
+}
+
+// rejectSymlink prevents installation from overwriting files outside the skill target.
+func rejectSymlink(path string) error {
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("check bundled skill file %s: %w", path, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("bundled skill file %s must not be a symlink", path)
+	}
+	return nil
+}
+
+// shouldInstallBundledFile excludes Codex-only metadata from other providers.
+func shouldInstallBundledFile(provider Provider, skill bundledSkill, path string) bool {
+	return provider == ProviderCodex || !strings.HasPrefix(path, skill.root+"/agents/")
+}
+
+// claudeSkillContent adds Claude's explicit-only invocation setting to SDD metadata.
+func claudeSkillContent(content []byte) ([]byte, error) {
+	const frontmatterBoundary = "---\n"
+	if !strings.HasPrefix(string(content), frontmatterBoundary) {
+		return nil, fmt.Errorf("SDD skill is missing YAML frontmatter")
+	}
+	return []byte(strings.Replace(string(content), frontmatterBoundary, frontmatterBoundary+"disable-model-invocation: true\n", 1)), nil
+}
+
 // ensureSkillTarget creates the skill directory and optionally clears it first.
 func ensureSkillTarget(target string, force bool) error {
-	_, err := os.Stat(target)
-	if err == nil && force {
+	info, err := os.Lstat(target)
+	if err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("skill target %s must not be a symlink", target)
+	} else if err == nil && force {
 		if err := os.RemoveAll(target); err != nil {
 			return fmt.Errorf("remove existing skill at %s: %w", target, err)
 		}
+	} else if err == nil && !info.IsDir() {
+		return fmt.Errorf("skill target %s must be a directory", target)
 	} else if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("check target %s: %w", target, err)
 	}

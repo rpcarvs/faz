@@ -20,7 +20,12 @@ func TestInstallCodexCommandInstallsGlobalIntegration(t *testing.T) {
 	if !strings.Contains(output, "Installed Codex global integration") {
 		t.Fatalf("unexpected output:\n%s", output)
 	}
-	assertPathExists(t, filepath.Join(codexHome, "skills", "task-management-with-faz", "SKILL.md"))
+	assertPathExists(t, filepath.Join(codexHome, "skills", "faz-task-management", "SKILL.md"))
+	assertPathExists(t, filepath.Join(codexHome, "skills", "faz-spec-driven", "SKILL.md"))
+	assertPathExists(t, filepath.Join(codexHome, "skills", "faz-spec-driven", "agents", "openai.yaml"))
+	if count := strings.Count(output, "  Skill: "); count != 2 {
+		t.Fatalf("expected two installed skills, got %d:\n%s", count, output)
+	}
 	assertPathExists(t, filepath.Join(codexHome, "AGENTS.md"))
 	assertPathExists(t, filepath.Join(codexHome, "hooks.json"))
 }
@@ -38,7 +43,11 @@ func TestInstallClaudeLocalCommandUsesProjectRoot(t *testing.T) {
 	assertPathExists(t, filepath.Join(root, "AGENTS.md"))
 	assertPathExists(t, filepath.Join(root, "CLAUDE.md"))
 	assertPathExists(t, filepath.Join(root, ".claude", "settings.json"))
-	assertPathExists(t, filepath.Join(root, ".claude", "skills", "task-management-with-faz", "SKILL.md"))
+	assertPathExists(t, filepath.Join(root, ".claude", "skills", "faz-task-management", "SKILL.md"))
+	assertPathExists(t, filepath.Join(root, ".claude", "skills", "faz-spec-driven", "SKILL.md"))
+	if count := strings.Count(output, "  Skill: "); count != 2 {
+		t.Fatalf("expected two installed skills, got %d:\n%s", count, output)
+	}
 }
 
 // runInstallCommand executes the install command with test-local IO.

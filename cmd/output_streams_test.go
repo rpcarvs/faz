@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/rpcarvs/faz/internal/model"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // TestRootCommandsWriteNormalOutputToStdout verifies runtime command execution keeps stderr clean.
@@ -96,6 +98,7 @@ func TestClaimWritesFullSuccessResponseToStdout(t *testing.T) {
 // executeRootCommand runs the root command with captured stdout and stderr.
 func executeRootCommand(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
+	resetCommandFlags(rootCmd)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -112,8 +115,20 @@ func executeRootCommand(t *testing.T, args ...string) (string, string, error) {
 	rootCmd.SetOut(previousOut)
 	rootCmd.SetErr(previousErr)
 	rootCmd.SetArgs(nil)
+	resetCommandFlags(rootCmd)
 
 	return stdout.String(), stderr.String(), err
+}
+
+// resetCommandFlags prevents global Cobra flag state from leaking between command invocations in tests.
+func resetCommandFlags(command *cobra.Command) {
+	command.Flags().VisitAll(func(flag *pflag.Flag) {
+		_ = flag.Value.Set(flag.DefValue)
+		flag.Changed = false
+	})
+	for _, child := range command.Commands() {
+		resetCommandFlags(child)
+	}
 }
 
 // runInitForTest initializes faz in the current repository and fails fast on errors.

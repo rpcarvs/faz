@@ -41,6 +41,7 @@ var showCmd = &cobra.Command{
 		if issue.ParentID != nil {
 			stdoutPrintf(cmd, "Parent: %s\n", *issue.ParentID)
 		}
+		printIssueSDDAssociations(cmd.OutOrStdout(), issue)
 		stdoutPrintf(cmd, "Created: %s\n", issue.CreatedAt.Format("2006-01-02 15:04:05"))
 		stdoutPrintf(cmd, "Updated: %s\n", issue.UpdatedAt.Format("2006-01-02 15:04:05"))
 		if issue.ClosedAt != nil {
