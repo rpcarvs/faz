@@ -52,7 +52,7 @@ Use --local to install into the current Git repository instead of the global
 	}
 
 	cmd.Flags().BoolVar(&local, "local", false, "Install into the current Git repository")
-	cmd.Flags().BoolVar(&force, "force", false, "Replace existing skill directory before installing")
+	cmd.Flags().BoolVar(&force, "force", false, "Replace skill directories and update a differing Faz hook integration")
 	return cmd
 }
 

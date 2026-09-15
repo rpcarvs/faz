@@ -109,6 +109,7 @@ func TestMigrateRollsBackFailedUpgradeAndRetries(t *testing.T) {
 	if issueColumnExists(t, sqlDB, "plan_id") {
 		t.Fatalf("failed migration left plan_id column behind")
 	}
+	assertSchemaVersion(t, sqlDB, 0)
 	if _, err := sqlDB.Exec(`UPDATE issues SET public_id = 'unique' WHERE id = 2`); err != nil {
 		t.Fatalf("repair duplicate public ID: %v", err)
 	}
@@ -117,6 +118,76 @@ func TestMigrateRollsBackFailedUpgradeAndRetries(t *testing.T) {
 	}
 	if !issueColumnExists(t, sqlDB, "plan_id") || !issueColumnExists(t, sqlDB, "work_id") {
 		t.Fatalf("retry migration did not add SDD columns")
+	}
+	assertSchemaVersion(t, sqlDB, schemaVersion)
+}
+
+// TestCurrentProjectOpensDuringWrite verifies normal WAL reads do not request migration locks.
+func TestCurrentProjectOpensDuringWrite(t *testing.T) {
+	projectDir := t.TempDir()
+	createLegacyProjectDB(t, projectDir)
+	writer, _, err := OpenProjectDB(projectDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = writer.Close() }()
+	assertSchemaVersion(t, writer, schemaVersion)
+	if _, err := writer.Exec(`PRAGMA journal_mode = WAL`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.Exec(`BEGIN IMMEDIATE`); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _, _ = writer.Exec(`ROLLBACK`) }()
+	if _, err := writer.Exec(`UPDATE issues SET title = 'Uncommitted' WHERE public_id = 'faz-old1'`); err != nil {
+		t.Fatal(err)
+	}
+	reader, _, err := OpenProjectDB(projectDir)
+	if err != nil {
+		t.Fatalf("current database open requested a writer lock: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+	var title string
+	if err := reader.QueryRow(`SELECT title FROM issues WHERE public_id = 'faz-old1'`).Scan(&title); err != nil {
+		t.Fatal(err)
+	}
+	if title != "Legacy task" {
+		t.Fatalf("expected committed snapshot, got %q", title)
+	}
+}
+
+// TestMigrateRejectsNewerSchema prevents an older binary from modifying unsupported storage.
+func TestMigrateRejectsNewerSchema(t *testing.T) {
+	sqlDB, err := Open(filepath.Join(t.TempDir(), "future.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sqlDB.Close() }()
+	if _, err := sqlDB.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion+1)); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(sqlDB); err == nil {
+		t.Fatal("expected unsupported schema error")
+	}
+	assertSchemaVersion(t, sqlDB, schemaVersion+1)
+	var tables int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'`).Scan(&tables); err != nil {
+		t.Fatal(err)
+	}
+	if tables != 0 {
+		t.Fatal("unsupported schema was modified")
+	}
+}
+
+// assertSchemaVersion verifies that a migration records its completion transactionally.
+func assertSchemaVersion(t *testing.T, sqlDB *sql.DB, expected int) {
+	t.Helper()
+	var version int
+	if err := sqlDB.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != expected {
+		t.Fatalf("schema version = %d, want %d", version, expected)
 	}
 }
 

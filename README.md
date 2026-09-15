@@ -51,6 +51,7 @@ Behavior:
 - Installs the `faz-task-management` and `faz-spec-driven` skills.
 - Adds or updates the managed FAZ task-management context block.
 - Installs a SessionStart hook that runs `faz init && faz onboard` inside Git repositories.
+- Identical Faz hooks are left unchanged. Differing Faz hooks are preserved unless `--force` is supplied; installation reports created, unchanged, skipped, or updated. Unrelated hooks and settings are preserved.
 - Keeps spec-driven development explicitly invoked. The SessionStart hook runs only normal Faz initialization and onboarding.
 - Prints all installed or updated paths.
 

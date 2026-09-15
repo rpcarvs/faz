@@ -76,18 +76,21 @@ func InstallProvider(options InstallOptions) (InstallResult, error) {
 	if err != nil {
 		return InstallResult{}, err
 	}
+	if err := validateInstallInputs(options, skillRoot, contextPath, hookPath); err != nil {
+		return InstallResult{}, err
+	}
 
 	skillPaths, err := installBundledSkills(skillRoot, options.Provider, options.Force)
 	if err != nil {
-		return InstallResult{}, err
+		return InstallResult{}, fmt.Errorf("install skills (integration may be partially updated): %w", err)
 	}
 	contextAction, err := InstallContextAtPath(contextPath)
 	if err != nil {
-		return InstallResult{}, err
+		return InstallResult{}, fmt.Errorf("install context (integration may be partially updated): %w", err)
 	}
-	hookAction, err := InstallHookConfigAtPath(hookPath)
+	hookAction, err := InstallHookConfigAtPath(hookPath, options.Force)
 	if err != nil {
-		return InstallResult{}, err
+		return InstallResult{}, fmt.Errorf("install hooks (integration may be partially updated): %w", err)
 	}
 
 	result := InstallResult{
@@ -106,7 +109,7 @@ func InstallProvider(options InstallOptions) (InstallResult, error) {
 		pointerPath := filepath.Join(options.LocalRoot, "CLAUDE.md")
 		action, err := InstallClaudePointerAtPath(pointerPath)
 		if err != nil {
-			return InstallResult{}, err
+			return InstallResult{}, fmt.Errorf("install Claude pointer (integration may be partially updated): %w", err)
 		}
 		result.ClaudePointerPath = pointerPath
 		result.ClaudePointerAction = action

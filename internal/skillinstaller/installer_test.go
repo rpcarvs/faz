@@ -423,10 +423,10 @@ func TestInstallHookConfigAtPathMergesWithoutDuplication(t *testing.T) {
 		t.Fatalf("seed hooks: %v", err)
 	}
 
-	if _, err := InstallHookConfigAtPath(path); err != nil {
+	if _, err := InstallHookConfigAtPath(path, false); err != nil {
 		t.Fatalf("first hook install: %v", err)
 	}
-	if _, err := InstallHookConfigAtPath(path); err != nil {
+	if _, err := InstallHookConfigAtPath(path, false); err != nil {
 		t.Fatalf("second hook install: %v", err)
 	}
 
@@ -453,7 +453,7 @@ func TestInstallHookConfigAtPathReportsInvalidJSON(t *testing.T) {
 		t.Fatalf("seed hooks: %v", err)
 	}
 
-	_, err := InstallHookConfigAtPath(path)
+	_, err := InstallHookConfigAtPath(path, false)
 	if err == nil {
 		t.Fatal("expected invalid JSON error")
 	}

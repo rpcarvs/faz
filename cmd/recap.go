@@ -14,7 +14,6 @@ var recapCmd = &cobra.Command{
 		stdoutPrintln(cmd, "Core flow")
 		stdoutPrintln(cmd, "  faz create \"Checkout revamp\" --type epic --priority 1 --description \"Improve checkout flow\"")
 		stdoutPrintln(cmd, "  faz create \"Add address validation\" --type task --priority 1 --parent faz-ab12 --description \"Client and server checks\"")
-		stdoutPrintln(cmd, "  faz dep add faz-ab12.0 faz-ab12")
 		stdoutPrintln(cmd, "  faz list --status open")
 		stdoutPrintln(cmd, "  faz children faz-ab12")
 		stdoutPrintln(cmd, "  faz ready")

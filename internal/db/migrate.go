@@ -6,7 +6,10 @@ import (
 	"fmt"
 )
 
-// Migrate creates and updates required tables for the faz database.
+// schemaVersion covers the current tables, association columns, indexes and triggers.
+const schemaVersion = 1
+
+// Migrate upgrades older databases and leaves current schemas read-only.
 func Migrate(db *sql.DB) error {
 	ctx := context.Background()
 	conn, err := db.Conn(ctx)
@@ -14,6 +17,10 @@ func Migrate(db *sql.DB) error {
 		return fmt.Errorf("acquire migration connection: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
+	needed, err := needsMigration(ctx, conn)
+	if err != nil || !needed {
+		return err
+	}
 	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
 		return fmt.Errorf("enable migration foreign keys: %w", err)
 	}
@@ -27,14 +34,34 @@ func Migrate(db *sql.DB) error {
 			_, _ = conn.ExecContext(ctx, `ROLLBACK`)
 		}
 	}()
+	// Another opener may have completed the upgrade while this connection waited.
+	needed, err = needsMigration(ctx, conn)
+	if err != nil || !needed {
+		return err
+	}
 	if err := migrateConnection(ctx, conn); err != nil {
 		return err
+	}
+	if _, err := conn.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion)); err != nil {
+		return fmt.Errorf("record schema version: %w", err)
 	}
 	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
 		return fmt.Errorf("commit migration: %w", err)
 	}
 	transactionOpen = false
 	return nil
+}
+
+// needsMigration reads the schema version without requesting a writer lock.
+func needsMigration(ctx context.Context, conn *sql.Conn) (bool, error) {
+	var version int
+	if err := conn.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&version); err != nil {
+		return false, fmt.Errorf("read schema version: %w", err)
+	}
+	if version < 0 || version > schemaVersion {
+		return false, fmt.Errorf("unsupported database schema version %d (supported: %d)", version, schemaVersion)
+	}
+	return version < schemaVersion, nil
 }
 
 // migrationExecutor is the single pinned connection used for a migration transaction.

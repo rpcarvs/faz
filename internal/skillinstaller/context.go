@@ -23,11 +23,10 @@ const mandatoryContextBody = `# MANDATORY Task Management
 
 - Use the ` + "`faz-task-management`" + ` SKILL and the ` + "`faz`" + ` CLI for all task management, tracking, and status updates.
 - Remember to add a meaningful and rich descriptions for the tasks so other agents will know what needs to be done by just reading the task.
-- Unless the user has already approved the relevant scope and explicitly instructed implementation, wait for user approval after creating the tasks.
+- Wait for user approval after creating the tasks.
 - Instead of aggregating a lot of work in one task, prefer creating several task with concise short work.
 - Type reminder: Classify each issue type: task, bug, feature, chore, decision.
-- Dynamic issue creation: Remember you must dynamically create issues during work if you find a bug or other problems.
-- An explicitly invoked document-first workflow may draft or reconcile documents before task creation. It must obtain documented scope approval, prepare ready work, and stop before implementation. This exception does not add a document workflow to ordinary Faz sessions.`
+- Dynamic issue creation: Remember you must dynamically create issues during work if you find a bug or other problems.`
 
 const claudeLocalPointerBody = "See [AGENTS.md](./AGENTS.md)"
 
