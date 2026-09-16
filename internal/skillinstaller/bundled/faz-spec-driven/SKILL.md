@@ -17,7 +17,7 @@ faz-specs/
   PLAN02.md
 ```
 
-Plan identifiers are stable filename stems, such as `PLAN01`. Allocate a new identifier as the highest existing numeric suffix plus one, with at least two digits. Do not reuse holes, rename plans, or introduce a plan registry. A new brief normally creates a new plan; amend the relevant plan when the brief clearly revises approved work.
+Plan identifiers are stable filename stems, such as `PLAN01`. Allocate a new identifier as the highest existing numeric suffix plus one, with at least two digits. Do not reuse holes, rename plans, or introduce a plan registry. A new brief normally creates a new plan; amend the relevant unfinished plan when the brief clearly revises approved work. Plans marked `Implemented` remain historical records; subsequent work needs a new explicitly invoked SDD plan or ordinary non-SDD Faz work.
 
 ## Select the mode
 
@@ -38,7 +38,7 @@ When the invocation has no brief:
 2. Otherwise, read the approved documents, relevant code and tests, and existing Faz work, including closed work when it is associated with the plan.
 3. Compare implementation evidence with approved requirements, architecture, outcomes, acceptance criteria, and recorded completion evidence.
 4. If behavior exists outside approved scope, record it as a discrepancy and propose a document change for approval. Never silently rewrite requirements to make unapproved behavior intended.
-5. Preserve dated completion history. Distinguish an intentional, approved supersession from a regression or an unmet criterion. Do not change documents merely because Faz task counts or leases changed.
+5. Preserve dated completion history. Distinguish an intentional, approved supersession from a regression or an unmet criterion. Report discrepancies concerning an `Implemented` plan without reopening or editing it; propose follow-up work separately, without authorizing implementation. Do not change documents merely because Faz task counts or leases changed.
 
 If there is no meaningful discrepancy, report that result without unnecessary document churn. A missing local `.faz/` database is not evidence that a plan was not implemented.
 
@@ -57,7 +57,7 @@ Each plan must contain Code boundaries and Acceptance and verification sections.
 
 Every generated plan must retain concise, actionable guidance directly under `## Work outcomes` that Wxx entries are outcomes rather than Faz task slots and that implementation agents choose the issue types, hierarchy, count, and dependencies. Keep the table and detailed subsections consistent. Wxx references name product outcomes, not implementation task slots. Do not put Faz IDs, prescribed issue types or counts, required epics, or a one-to-one task mapping in a plan. Agents may choose and revise the Faz breakdown, and may create bugs or other work discovered during implementation.
 
-Every generated plan must also retain a `## Completion summary` near the top. It must direct normal implementation agents to record dated acceptance evidence there without invoking this skill or altering approved requirements. It must state that partial outcome evidence is recorded separately, whole-plan completion requires every applicable acceptance criterion, and later discrepancies preserve earlier evidence and distinguish supersession from regression.
+Every generated plan must also retain a `## Completion summary` near the top, including the template's actionable close-out instructions. These must remain in the generated document, not only in this skill: header transitions, dated outcome evidence, human-validation gates, the correction loop, and the boundary after `Implemented`. Implementation agents follow them without invoking this skill or altering approved requirements.
 
 ## Approval, Faz preparation, and handoff
 
@@ -65,7 +65,7 @@ Document drafting under this explicitly invoked skill is allowed before an imple
 
 After the human approves the document revision:
 
-1. Persist the approval date, approved revision, and exactly reviewed document changes in the relevant plan's Review history. Promote only the reviewed proposals to approved content. Preserve unrelated content, unapproved proposals, and prior history intact.
+1. Persist the approval date, approved revision, and exactly reviewed document changes in the relevant plan's Review history, and update its `Approval:` header to identify the approved revision. Promote only the reviewed proposals to approved content. Preserve unrelated content, unapproved proposals, and prior history intact.
 2. Read the actual `PLANnn` and Wxx identifiers. Do not normalize identifiers: `W1` and `W01` are distinct.
 3. Before any Faz issue mutation, verify that the installed CLI supports the plan/work association and coverage operations needed for the handoff, including create or update associations and `faz list --all --plan PLAN01 --work W01`. If support is missing, report an upgrade/readiness blocker and stop without creating unlinked work.
 4. Inspect existing Faz coverage, including descriptions, dependencies, claims, status, and closed work. Shared plan/work associations are legitimate and do not prove duplicate work.
@@ -76,4 +76,12 @@ The approval covers the exactly reviewed document scope, so do not seek an extra
 
 ## During normal implementation
 
-Normal Faz work remains independent of this skill. After a separate human implementation instruction, an implementation agent claims its linked Faz item, reads the linked plan, and implements normally without invoking this skill again. Record dated acceptance evidence in the plan's Completion summary after verifying an outcome. Mark the whole plan complete only when every applicable acceptance criterion is verified; record partially verified outcomes separately. Do not equate closed tasks with verified completion, mirror live task counts, or have `faz close` write Markdown. A later reconciliation can report new discrepancies while preserving the earlier completion record.
+Normal Faz work remains independent of this skill. After a separate human implementation instruction, an implementation agent claims its linked Faz item, reads the linked plan, sets `Implementation: In progress`, and implements normally without invoking this skill again. `Not started` applies until implementation begins. Record dated acceptance evidence by outcome in the plan's Completion summary, including partial verification and remaining checks. Do not equate closed tasks with verified completion, mirror live task counts, or have `faz close` write Markdown.
+
+## Post-implementation finalization
+
+1. Verify every applicable acceptance criterion and record dated evidence. If verification fails or work remains, keep `Implementation: In progress`; do not claim whole-plan completion.
+2. Require human validation when an acceptance criterion calls for it or the implementation agent determines human testing or confirmation is needed. Record what the human must check and why, set `Implementation: Awaiting human validation` when ready for that review, and ask the human. Once requested, this validation gates completion.
+3. If the human reports a failure before completion, record it, return to `Implementation: In progress`, and create or reopen Faz work linked to the same plan and outcome. Correct the issue, repeat relevant verification, and request human revalidation. Corrections to approved behavior need no scope revision; changed requirements need an approved revision to the unfinished plan. Preserve prior evidence and the correction history.
+4. When all applicable criteria pass and any requested human validation is confirmed, record that confirmation and a dated whole-plan completion summary, then set `Implementation: Implemented` before reporting completion. Clear contextual confirmation such as "it works" is sufficient for the requested checks, not for unrelated unverified criteria. If no human validation is required or requested, finalize after agent verification without adding a confirmation gate.
+5. Keep `Approval:` and `Revision:` tied to document-scope approval, not implementation acceptance; completion evidence alone does not change them. After `Implemented`, do not reopen or edit the completed plan for new issues. Handle those through a new explicitly invoked SDD plan or ordinary Faz work outside that plan.

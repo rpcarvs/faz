@@ -17,11 +17,19 @@ List intentionally excluded behavior, deferred work, and assumptions that need s
 
 Whole-plan completion: Not verified
 
-Record a dated, evidence-backed whole-plan completion summary only after every applicable acceptance criterion is verified. Record a verified individual outcome below when the plan is still incomplete. Do not infer completion from closed Faz tasks or mirror task counts. Implementation agents do not need to invoke the SDD skill to add this evidence. Do not alter approved requirements while recording it; preserve prior evidence if a later reconciliation identifies a discrepancy or approved supersession.
+Retain the following close-out instructions in the generated plan. Implementation agents follow them without invoking the SDD skill. Do not infer completion from closed Faz tasks or mirror task counts.
+
+### Close-out instructions
+
+1. Keep `Implementation: Not started` until authorized implementation begins, then set `In progress`. Record dated evidence by outcome, including partial verification and remaining acceptance checks. Do not alter approved requirements while recording progress.
+2. Verify every applicable acceptance criterion. Human validation is required when a criterion calls for it or the agent determines human testing or confirmation is needed. Record what to check and why. When ready for that review, set `Implementation: Awaiting human validation` and ask the human; the requested confirmation now gates completion.
+3. If the human reports a failure before completion, record it, return to `In progress`, and create or reopen Faz work linked to this plan and outcome. Correct it, repeat relevant verification, and request human revalidation. Preserve earlier evidence and record corrections. Fixing approved behavior needs no scope revision; changed requirements need an approved revision to this unfinished plan.
+4. Once all applicable criteria pass and any requested human validation is confirmed, record dated whole-plan evidence and the human confirmation, if applicable. Update `Whole-plan completion` to `Verified` with the date and `Implementation` to `Implemented` before reporting completion. Clear contextual confirmation such as "it works" confirms the requested checks, not unrelated unverified criteria. Without required or requested human validation, agent verification is sufficient.
+5. `Approval` and `Revision` concern document-scope approval, not implementation acceptance; completion evidence alone does not change them. After `Implemented`, keep this plan as a historical record. New issues, including discrepancies found by reconciliation, require a new explicitly invoked SDD plan or ordinary Faz work outside this plan; do not reopen or edit this plan for them.
 
 ### Outcome completion records
 
-When an outcome is partially verified, record its date, verified outcome, evidence, and remaining applicable criteria here.
+Record each outcome's date, verification evidence, and remaining applicable criteria here. Include pending human checks and their eventual confirmation or reported failures.
 
 ## Requirements
 
@@ -55,7 +63,7 @@ Verification: AC01
 
 ### AC01 Short acceptance criterion
 
-State the observable acceptance condition and the test, inspection, or evidence that verifies it.
+State the observable acceptance condition and the test, inspection, or evidence that verifies it. Identify any required human validation and what the human must check.
 
 ## Review history
 
