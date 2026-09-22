@@ -214,38 +214,56 @@ func TestInstallProviderInstallsBundlesForEveryProviderScope(t *testing.T) {
 
 // TestInstallProviderRerunPreservesCustomFilesAndForceReplacesBundles verifies rerun behavior.
 func TestInstallProviderRerunPreservesCustomFilesAndForceReplacesBundles(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("HOME", t.TempDir())
+	for _, provider := range []Provider{ProviderCodex, ProviderClaude} {
+		for _, local := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/local=%t", provider, local), func(t *testing.T) {
+				root := t.TempDir()
+				t.Setenv("HOME", root)
+				t.Setenv("CODEX_HOME", filepath.Join(root, "codex-home"))
+				options := InstallOptions{Provider: provider, Local: local, LocalRoot: filepath.Join(root, "project")}
+				result, err := InstallProvider(options)
+				if err != nil {
+					t.Fatalf("first install: %v", err)
+				}
+				for _, path := range result.SkillPaths {
+					if err := os.WriteFile(filepath.Join(path, "custom.txt"), []byte("custom"), 0o644); err != nil {
+						t.Fatalf("write custom skill file: %v", err)
+					}
+					if err := os.WriteFile(filepath.Join(path, "SKILL.md"), []byte("stale"), 0o644); err != nil {
+						t.Fatalf("change installed skill: %v", err)
+					}
+				}
+				if err := os.WriteFile(filepath.Join(result.SkillPaths[1], "assets", "SPECS.md"), []byte("stale"), 0o644); err != nil {
+					t.Fatalf("change installed asset: %v", err)
+				}
 
-	options := InstallOptions{Provider: ProviderCodex, Local: true, LocalRoot: root}
-	result, err := InstallProvider(options)
-	if err != nil {
-		t.Fatalf("first install: %v", err)
-	}
+				result, err = InstallProvider(options)
+				if err != nil {
+					t.Fatalf("rerun install: %v", err)
+				}
+				for _, path := range result.SkillPaths {
+					content, err := os.ReadFile(filepath.Join(path, "custom.txt"))
+					if err != nil || string(content) != "custom" {
+						t.Fatalf("rerun changed custom file in %s: %v", path, err)
+					}
+				}
+				assertInstalledBundles(t, provider, result)
+				assertExplicitInvocationMetadata(t, provider, result)
 
-	customPath := filepath.Join(result.SkillPaths[1], "custom.txt")
-	if err := os.WriteFile(customPath, []byte("custom"), 0o644); err != nil {
-		t.Fatalf("write custom skill file: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(result.SkillPaths[1], "assets", "SPECS.md"), []byte("stale"), 0o644); err != nil {
-		t.Fatalf("change installed asset: %v", err)
-	}
-
-	result, err = InstallProvider(options)
-	if err != nil {
-		t.Fatalf("rerun install: %v", err)
-	}
-	if _, err := os.Stat(customPath); err != nil {
-		t.Fatalf("rerun removed custom file: %v", err)
-	}
-	assertInstalledBundles(t, ProviderCodex, result)
-
-	options.Force = true
-	if _, err := InstallProvider(options); err != nil {
-		t.Fatalf("force install: %v", err)
-	}
-	if _, err := os.Stat(customPath); !os.IsNotExist(err) {
-		t.Fatalf("force install retained custom file: %v", err)
+				options.Force = true
+				result, err = InstallProvider(options)
+				if err != nil {
+					t.Fatalf("force install: %v", err)
+				}
+				for _, path := range result.SkillPaths {
+					if _, err := os.Stat(filepath.Join(path, "custom.txt")); !os.IsNotExist(err) {
+						t.Fatalf("force install retained custom file in %s: %v", path, err)
+					}
+				}
+				assertInstalledBundles(t, provider, result)
+				assertExplicitInvocationMetadata(t, provider, result)
+			})
+		}
 	}
 }
 
@@ -486,8 +504,11 @@ func assertInstalledBundles(t *testing.T, provider Provider, result InstallResul
 	if result.SkillPath != result.SkillPaths[0] {
 		t.Fatalf("compatibility skill path %s does not match task skill %s", result.SkillPath, result.SkillPaths[0])
 	}
-	for _, skill := range bundledSkills {
+	for i, skill := range bundledSkills {
 		target := filepath.Join(filepath.Dir(result.SkillPath), skill.directory)
+		if result.SkillPaths[i] != target {
+			t.Fatalf("unexpected installed path for %s: %s", skill.directory, result.SkillPaths[i])
+		}
 		assertInstalledBundle(t, provider, skill, target)
 	}
 }
@@ -509,7 +530,7 @@ func assertInstalledBundle(t *testing.T, provider Provider, skill bundledSkill, 
 		if err != nil {
 			return err
 		}
-		if provider == ProviderClaude && skill.directory == specDrivenSkillDirName && relativePath == "SKILL.md" {
+		if provider == ProviderClaude && skill.explicitOnly && relativePath == "SKILL.md" {
 			expected, err = claudeSkillContent(expected)
 			if err != nil {
 				return err
@@ -539,6 +560,9 @@ func assertInstalledBundle(t *testing.T, provider Provider, skill bundledSkill, 
 // assertExplicitInvocationMetadata verifies each provider's independent policy.
 func assertExplicitInvocationMetadata(t *testing.T, provider Provider, result InstallResult) {
 	t.Helper()
+	if len(result.SkillPaths) != 3 {
+		t.Fatalf("expected three installed skills, got %d", len(result.SkillPaths))
+	}
 	sddPath := result.SkillPaths[1]
 	if filepath.Base(sddPath) != "faz-spec-driven" {
 		t.Fatalf("unexpected SDD skill directory: %s", sddPath)
@@ -552,13 +576,25 @@ func assertExplicitInvocationMetadata(t *testing.T, provider Provider, result In
 			t.Fatalf("installed template %s is empty", name)
 		}
 	}
-	skill, err := os.ReadFile(filepath.Join(sddPath, "SKILL.md"))
+	for i, name := range []string{"faz-spec-driven", "faz-orchestration"} {
+		path := result.SkillPaths[i+1]
+		if filepath.Base(path) != name {
+			t.Fatalf("unexpected skill directory for %s: %s", name, path)
+		}
+		assertExplicitSkillMetadata(t, provider, path, name)
+	}
+}
+
+// assertExplicitSkillMetadata checks installed metadata without relying on the bundle policy flag.
+func assertExplicitSkillMetadata(t *testing.T, provider Provider, path, name string) {
+	t.Helper()
+	skill, err := os.ReadFile(filepath.Join(path, "SKILL.md"))
 	if err != nil {
-		t.Fatalf("read SDD skill: %v", err)
+		t.Fatalf("read %s skill: %v", name, err)
 	}
 	frontmatter := frontmatter(t, string(skill))
-	if !strings.Contains(frontmatter, "\nname: faz-spec-driven\n") {
-		t.Fatalf("unexpected SDD skill name:\n%s", frontmatter)
+	if !strings.Contains(frontmatter, "\nname: "+name+"\n") {
+		t.Fatalf("unexpected %s skill name:\n%s", name, frontmatter)
 	}
 	if provider == ProviderClaude {
 		if count := strings.Count(frontmatter, "disable-model-invocation: true\n"); count != 1 {
@@ -567,9 +603,9 @@ func assertExplicitInvocationMetadata(t *testing.T, provider Provider, result In
 		return
 	}
 	if strings.Contains(frontmatter, "disable-model-invocation:") {
-		t.Fatalf("Codex SDD skill unexpectedly includes Claude metadata:\n%s", frontmatter)
+		t.Fatalf("Codex %s skill unexpectedly includes Claude metadata:\n%s", name, frontmatter)
 	}
-	metadata, err := os.ReadFile(filepath.Join(sddPath, "agents", "openai.yaml"))
+	metadata, err := os.ReadFile(filepath.Join(path, "agents", "openai.yaml"))
 	if err != nil {
 		t.Fatalf("read Codex metadata: %v", err)
 	}

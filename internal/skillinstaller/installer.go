@@ -11,23 +11,27 @@ import (
 
 const taskManagementSkillDirName = "faz-task-management"
 const specDrivenSkillDirName = "faz-spec-driven"
+const orchestrationSkillDirName = "faz-orchestration"
 const skillDirName = taskManagementSkillDirName
 const bundledSkillPath = "bundled/faz-task-management/SKILL.md"
 const sessionStartCommand = "git rev-parse --show-toplevel >/dev/null 2>&1 && faz init && faz onboard"
 
 // bundledFiles contains built-in skill files to install for supported tools.
 //
-//go:embed bundled/faz-task-management/SKILL.md bundled/faz-spec-driven
+//go:embed bundled/faz-task-management/SKILL.md bundled/faz-spec-driven bundled/faz-orchestration
 var bundledFiles embed.FS
 
+// bundledSkill defines a bundled skill and its invocation policy.
 type bundledSkill struct {
-	directory string
-	root      string
+	directory    string
+	root         string
+	explicitOnly bool
 }
 
 var bundledSkills = []bundledSkill{
 	{directory: taskManagementSkillDirName, root: "bundled/faz-task-management"},
-	{directory: specDrivenSkillDirName, root: "bundled/faz-spec-driven"},
+	{directory: specDrivenSkillDirName, root: "bundled/faz-spec-driven", explicitOnly: true},
+	{directory: orchestrationSkillDirName, root: "bundled/faz-orchestration", explicitOnly: true},
 }
 
 type Provider string
@@ -98,6 +102,7 @@ func InstallProvider(options InstallOptions) (InstallResult, error) {
 		SkillPaths: []string{
 			skillPaths[taskManagementSkillDirName],
 			skillPaths[specDrivenSkillDirName],
+			skillPaths[orchestrationSkillDirName],
 		},
 		ContextPath:   contextPath,
 		ContextAction: contextAction,
@@ -200,7 +205,7 @@ func installBundledSkill(root string, skill bundledSkill, provider Provider, for
 		if err != nil {
 			return fmt.Errorf("read bundled skill file %s: %w", path, err)
 		}
-		if provider == ProviderClaude && skill.directory == specDrivenSkillDirName && relativePath == "SKILL.md" {
+		if provider == ProviderClaude && skill.explicitOnly && relativePath == "SKILL.md" {
 			content, err = claudeSkillContent(content)
 			if err != nil {
 				return err
@@ -276,11 +281,11 @@ func shouldInstallBundledFile(provider Provider, skill bundledSkill, path string
 	return provider == ProviderCodex || !strings.HasPrefix(path, skill.root+"/agents/")
 }
 
-// claudeSkillContent adds Claude's explicit-only invocation setting to SDD metadata.
+// claudeSkillContent adds Claude's explicit-only invocation setting to skill metadata.
 func claudeSkillContent(content []byte) ([]byte, error) {
 	const frontmatterBoundary = "---\n"
 	if !strings.HasPrefix(string(content), frontmatterBoundary) {
-		return nil, fmt.Errorf("SDD skill is missing YAML frontmatter")
+		return nil, fmt.Errorf("explicit-only skill is missing YAML frontmatter")
 	}
 	return []byte(strings.Replace(string(content), frontmatterBoundary, frontmatterBoundary+"disable-model-invocation: true\n", 1)), nil
 }

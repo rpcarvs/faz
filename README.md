@@ -48,11 +48,11 @@ faz install claude
 
 Behavior:
 
-- Installs the `faz-task-management` and `faz-spec-driven` skills.
+- Installs the `faz-task-management`, `faz-spec-driven`, and `faz-orchestration` skills.
 - Adds or updates the managed FAZ task-management context block.
 - Installs a SessionStart hook that runs `faz init && faz onboard` inside Git repositories.
 - Identical Faz hooks are left unchanged. Differing Faz hooks are preserved unless `--force` is supplied; installation reports created, unchanged, skipped, or updated. Unrelated hooks and settings are preserved.
-- Keeps spec-driven development explicitly invoked. The SessionStart hook runs only normal Faz initialization and onboarding.
+- Keeps spec-driven development and orchestration explicitly invoked. The SessionStart hook runs only normal Faz initialization and onboarding.
 - Prints all installed or updated paths.
 
 Use `--local` to install into the current Git repository instead of the global agent config:
@@ -68,6 +68,22 @@ Local behavior:
 - Writes the managed context block to repo-root `AGENTS.md`.
 - For Claude, writes repo-root `CLAUDE.md` as a pointer to `AGENTS.md`.
 - Installs skills and hooks under repo-root `.codex/` or `.claude/`.
+
+## Task orchestration
+
+`faz-orchestration` explicitly starts supervised subagent execution of existing Faz work. It works with or without SDD, in the planning session or a fresh session. Optional trailing text selects scope or adds execution instructions:
+
+```text
+$faz-orchestration Implement PLAN01 using at most 3 subagents.
+```
+
+```text
+/faz-orchestration
+```
+
+Prepare the tasks, epics, and dependencies first. The skill does not create an initial task graph. It confirms ambiguous scope, respects dependencies and claims, and uses up to 10 concurrent subagents by default, subject to runtime capacity. If delegation is unavailable, it stops and reports the limitation.
+
+Workers claim assigned issues and report changes and verification evidence. The orchestrator reviews their work before closure. Unrelated bugs and decisions are recorded in Faz rather than silently implemented. Workers may read `faz-specs/` but cannot edit it; only the orchestrator updates an active plan's implementation status and completion evidence, respecting human-validation gates. Ordinary Faz sessions do not automatically invoke orchestration.
 
 ## Spec-driven development
 
