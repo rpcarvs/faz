@@ -25,6 +25,8 @@ const mandatoryContextBody = `# MANDATORY Task Management
 - Remember to add a meaningful and rich descriptions for the tasks so other agents will know what needs to be done by just reading the task.
 - Wait for user approval after creating the tasks.
 - Instead of aggregating a lot of work in one task, prefer creating several task with concise short work.
+- Group epics by domain or deliverable, not by the whole project; small work may need one or none.
+- Plan for parallel work with non-conflicting file ownership. Record every real prerequisite, but never add blockers merely to impose an order.
 - Type reminder: Classify each issue type: task, bug, feature, chore, decision.
 - Dynamic issue creation: Remember you must dynamically create issues during work if you find a bug or other problems.
 - **Never take decisions autonomously!** If you need a decision, immediately create a ` + "`decision`" + ` issue with FAZ and continue your work if you can, communicating the need to the user at the end. If the decision is needed immediately, stop and communicate to the user.`

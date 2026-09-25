@@ -23,27 +23,28 @@ Follow this lifecycle in order for every coding session.
 
 2. Plan
 - Reuse relevant open tasks when possible.
-- If none exist, create one epic and child task(s).
-- Do not batch epic and children creating together. This will fail as you need the epic id to define the children. Always create the epic first > get the id > and then create children.
+- Create missing tasks. Group related tasks into epics by distinct domain or deliverable, not under a project-wide umbrella. Use one epic for a cohesive deliverable, or none for small standalone work.
+- When using an epic, create it before its children so its ID is available.
 - Create tasks one command at a time.
 
 3. Execute
 - Claim exactly one non-epic item before coding: task, bug, feature, chore, or decision.
 - If `faz claim` fails because already claimed, do not work on it. Pick another ready task.
 - Use `faz update` only when task requirements change or need to be fixed.
-- Add new requirements as new child tasks under the epic before coding that new scope.
+- Add new requirements as tasks under the relevant epic, if any, before coding that new scope.
 
 4. Close
 - Run `faz close <id>` for completed non-epic work.
-- Confirm epic progress with `faz show <epic-id>`.
+- When an epic is used, confirm its progress with `faz show <epic-id>`.
 - Close epics after all children are done. DO NOT end the sessions leaving open epics with no children.
 
 ## Mandatory Task Rules
 
 - Tasks MUST be atomic units! Do not aggregate a lot of work into a task. Remember, atomic tasks!
 - Add rich descriptions to the atomic tasks so ANY other Coding Agent or Human will understand know what to do!
-- You first must created ALL the necessary epics and children before start working.
-- Set blockers ALWAYS! You must be explicitly when a task is being blocked by another task. That is non-negotiable. Use `faz dep` to manage blockers.
+- Create the tasks and any necessary epics for the planned scope before implementation.
+- Use `faz dep` for every real prerequisite, never merely to encode a preferred order. State what each blocker provides. Decompose work into independently implementable tasks where possible; genuine dependency chains remain valid.
+- Identify intended file ownership in task descriptions. Tasks scheduled concurrently must not edit the same files or conflict through shared mutable resources. Split shared work into a prerequisite where appropriate, or serialize conflicting edits.
 - After ALL this is done, communicate to the user and wait for approval.
 
 Example Case: User asks you ti develop a tool.
@@ -105,7 +106,7 @@ Use this pattern whenever the user asks for work.
 
 1. State a short draft plan in chat.
 2. Run orientation commands.
-3. Reuse or create epic plus child tasks.
+3. Reuse or create tasks, grouping into epics where appropriate.
 4. Share selected task IDs.
 5. Claim a non-epic task.
 6. Execute the task.
@@ -120,4 +121,3 @@ If spawning subagents that will also work, include this skill text and assign ea
 - If a faz command fails, correct syntax and retry.
 - Use `faz <command> --help` only after a failure.
 - Use `faz recap` for quick command reminders.
-

@@ -39,6 +39,8 @@ Record each outcome's date, verification evidence, and remaining applicable crit
 
 Wxx entries describe outcomes, not Faz task slots. Agents choose and evolve the issue types, hierarchy, count, and dependencies required to deliver them. Several work items may contribute to one outcome, and implementation may add bugs or other necessary work.
 
+List only real outcome prerequisites, not a preferred implementation order. Independent portions of dependent outcomes may proceed in parallel.
+
 | Outcome | Depends on | Requirements |
 | --- | --- | --- |
 | [W01: Short outcome title](#w01-short-outcome-title) | None | R01 |
@@ -57,7 +59,7 @@ Verification: AC01
 
 ## Code boundaries
 
-- Identify the expected components, packages, services, or external boundaries. These are guidance, not a prohibition on justified refactoring.
+- Identify the expected components, packages, services, or external boundaries. These are guidance, not a prohibition on justified refactoring. Identify shared-file or shared-resource constraints that affect parallel implementation.
 
 ## Acceptance and verification
 

@@ -19,7 +19,9 @@ This skill does not require SDD and is not part of ordinary Faz sessions. Use th
 
 ## Delegate and supervise
 
-Use up to 10 concurrent subagents unless the user specifies another limit, always bounded by the environment's capacity. This is a ceiling, not a target. Schedule only independent ready work; serialize overlapping edits or resolve ownership before dispatch. Workers must not spawn additional agents without coordinator authorization and capacity allocation.
+Use up to 10 concurrent subagents unless the user specifies another limit, always bounded by the environment's capacity. This is a ceiling, not a target. Schedule independent ready work concurrently when capacity allows. Never assign concurrent edits to the same file or conflicting shared mutable resources; resolve ownership or serialize that work first. Workers must not spawn additional agents without coordinator authorization and capacity allocation.
+
+If existing blockers appear unnecessary, report the specific dependency and proposed correction for user approval; do not bypass it.
 
 Give each worker:
 
