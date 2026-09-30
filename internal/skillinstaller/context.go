@@ -21,14 +21,16 @@ var managedPointerBlockPattern = regexp.MustCompile(`(?s)` + regexp.QuoteMeta(po
 
 const mandatoryContextBody = `# MANDATORY Task Management
 
+These rules govern implementation and its execution plan. Read-only questions, research, file inspection, codebase exploration, reviews, and diagnosis need no investigation task, claim, or Faz approval. Identified bugs must still be filed. Missing Faz or a repository must not block read-only assistance; report any inability to file bugs without initializing a repository solely for tracking.
+
 - Use the ` + "`faz-task-management`" + ` SKILL and the ` + "`faz`" + ` CLI for all task management, tracking, and status updates.
 - Remember to add a meaningful and rich descriptions for the tasks so other agents will know what needs to be done by just reading the task.
-- Wait for user approval after creating the tasks.
+- After preparing tasks for planned changes, wait for user approval before implementation. Bug filing requires no approval or claim.
 - Instead of aggregating a lot of work in one task, prefer creating several task with concise short work.
 - Group epics by domain or deliverable, not by the whole project; small work may need one or none.
 - Plan for parallel work with non-conflicting file ownership. Record every real prerequisite, but never add blockers merely to impose an order.
 - Type reminder: Classify each issue type: task, bug, feature, chore, decision.
-- Dynamic issue creation: Remember you must dynamically create issues during work if you find a bug or other problems.
+- Automatically create or reuse a bug issue when a bug is identified, including during read-only reviews. Record other discovered work during tracked implementation. Filing does not authorize fixing.
 - **Never take decisions autonomously!** If you need a decision, immediately create a ` + "`decision`" + ` issue with FAZ and continue your work if you can, communicating the need to the user at the end. If the decision is needed immediately, stop and communicate to the user.`
 
 const claudeLocalPointerBody = "See [AGENTS.md](./AGENTS.md)"

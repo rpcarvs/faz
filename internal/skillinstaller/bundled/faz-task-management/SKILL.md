@@ -1,20 +1,24 @@
 ---
 name: faz-task-management
-description: Enforce faz task tracking for all work. Use when starting sessions, planning or executing features, fixing bugs, refactoring, researching, analyzing, or any workflow where you need to work.
+description: Track implementation and its execution plan with Faz, and automatically file identified bugs. Read-only questions, research, exploration, reviews, and diagnosis do not require investigation tasks.
 ---
 
 # Task Management with faz
 
 ## Core Rule
 
-No work without a claimed faz task.
+Use Faz for implementation: creating, modifying, or deleting project deliverables such as code, tests, configuration, or documentation.
 
-- Run `faz claim <id>` successfully before action.
+Read-only questions, research, file inspection, codebase exploration, reviews, and diagnosis require no investigation task, claim, or Faz approval. Preparatory reading needs no separate task. Incidental caches, indexes, and temporary diagnostic output do not turn read-only assistance into implementation. Identified bugs must still be filed as described below.
+
+When preparing implementation, inspect first, then create or reuse tasks for the planned changes. Obtain approval before implementation.
+
+- Run `faz claim <id>` successfully before changing project deliverables.
 - Add meaningful and rich descriptions for the tasks so other agents will know precisely what needs to be done by just reading the task.
 
 ## Required Lifecycle
 
-Follow this lifecycle in order for every coding session.
+Follow this lifecycle for implementation requests, not read-only assistance or bug filing alone.
 
 1. Orient
 - (Occasionally) Run `faz onboard`. This does not need to be execute all the time but occasionally.
@@ -28,7 +32,7 @@ Follow this lifecycle in order for every coding session.
 - Create tasks one command at a time.
 
 3. Execute
-- Claim exactly one non-epic item before coding: task, bug, feature, chore, or decision.
+- Claim exactly one non-epic item before implementation: task, bug, feature, chore, or decision.
 - If `faz claim` fails because already claimed, do not work on it. Pick another ready task.
 - Use `faz update` only when task requirements change or need to be fixed.
 - Add new requirements as tasks under the relevant epic, if any, before coding that new scope.
@@ -45,7 +49,7 @@ Follow this lifecycle in order for every coding session.
 - Create the tasks and any necessary epics for the planned scope before implementation.
 - Use `faz dep` for every real prerequisite, never merely to encode a preferred order. State what each blocker provides. Decompose work into independently implementable tasks where possible; genuine dependency chains remain valid.
 - Identify intended file ownership in task descriptions. Tasks scheduled concurrently must not edit the same files or conflict through shared mutable resources. Split shared work into a prerequisite where appropriate, or serialize conflicting edits.
-- After ALL this is done, communicate to the user and wait for approval.
+- After preparing the tasks, share the planned changes and wait for approval before implementation.
 
 Example Case: User asks you ti develop a tool.
  - Given the request, you see may create 1 epic with topic A. It requires 3 atomic tasks.
@@ -75,12 +79,14 @@ faz create "Choose DB strategy" --type decision --priority 1 --description "..."
 
 ### Dynamic issue creations
 
-While implementing code and other works you may find bugs, stale code, missing documentation or other inconsistencies. Do not immediately and silently fix them. You must create a `faz` issue first as a `bug` or `chore` and notify about it when you finish your job. **That is critical** so these fixes do not happen silently.
+When a bug is identified, including during a read-only review or investigation of a user-reported bug, automatically create or reuse a Faz bug issue with the findings and reproduction details when available. Report the issue to the user. Filing requires no claim or approval and does not authorize fixing it; obtain approval and claim the issue before implementation.
+
+During tracked implementation, also record discovered maintenance work or other inconsistencies as appropriate issues before fixing them. Do not silently expand the approved scope.
 
 ## Non-Negotiable Constraints
 
 - Never claim epics.
-- If another workflow skill is active, still run faz lifecycle in parallel.
+- Another active skill does not by itself require the Faz lifecycle; apply the scope above.
 - Close epics after all children are closed and the epic is done.
 
 ## Command Set
@@ -102,22 +108,23 @@ While implementing code and other works you may find bugs, stale code, missing d
 
 ## Execution Pattern
 
-Use this pattern whenever the user asks for work.
+Use this pattern for implementation requests.
 
 1. State a short draft plan in chat.
 2. Run orientation commands.
 3. Reuse or create tasks, grouping into epics where appropriate.
-4. Share selected task IDs.
+4. Share selected task IDs and wait for approval before implementation.
 5. Claim a non-epic task.
 6. Execute the task.
 7. Close finished tasks and report final statuses.
 
 ## Subagent Requirement
 
-If spawning subagents that will also work, include this skill text and assign each subagent a specific faz task ID. Subagents do not inherit local skills automatically.
+For implementation subagents, include this skill text and assign each a specific Faz task ID. Read-only subagents need no task or claim; ensure their identified bugs are filed. Subagents do not inherit local skills automatically.
 
 ## Failure Protocol
 
+- Missing Faz or a repository must not block read-only assistance. Complete the request and report any inability to file identified bugs; do not initialize a repository solely for tracking.
 - If a faz command fails, correct syntax and retry.
 - Use `faz <command> --help` only after a failure.
 - Use `faz recap` for quick command reminders.
