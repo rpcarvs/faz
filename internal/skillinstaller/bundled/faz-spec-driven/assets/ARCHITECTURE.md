@@ -15,6 +15,8 @@ Record relevant existing boundaries, data flow, persistence, integrations, and c
 
 Describe only approved or proposed changes relevant to the current plan. Explain interfaces, ownership, error handling, compatibility, and operational consequences where they matter.
 
+Explain the chosen organization; consider lightweight domain boundaries where useful, without requiring DDD layers.
+
 ## Decisions and tradeoffs
 
 Record material choices, their rationale, and unresolved alternatives.

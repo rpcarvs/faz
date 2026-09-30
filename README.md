@@ -48,11 +48,11 @@ faz install claude
 
 Behavior:
 
-- Installs the `faz-task-management`, `faz-spec-driven`, and `faz-orchestration` skills.
+- Installs the `faz-task-management`, `faz-spec-driven`, `faz-orchestration`, and `faz-code-cleanup` skills.
 - Adds or updates the managed FAZ task-management context block.
 - Installs a SessionStart hook that runs `faz init && faz onboard` inside Git repositories.
 - Identical Faz hooks are left unchanged. Differing Faz hooks are preserved unless `--force` is supplied; installation reports created, unchanged, skipped, or updated. Unrelated hooks and settings are preserved.
-- Keeps spec-driven development and orchestration explicitly invoked. The SessionStart hook runs only normal Faz initialization and onboarding.
+- Keeps spec-driven development, orchestration, and code cleanup explicitly invoked. The SessionStart hook runs only normal Faz initialization and onboarding.
 - Prints all installed or updated paths.
 
 Use `--local` to install into the current Git repository instead of the global agent config:
@@ -84,6 +84,24 @@ $faz-orchestration Implement PLAN01 using at most 3 subagents.
 Prepare the tasks, epics, and dependencies first. The skill does not create an initial task graph. It confirms ambiguous scope, respects dependencies and claims, and uses up to 10 concurrent subagents by default, subject to runtime capacity. If delegation is unavailable, it stops and reports the limitation.
 
 Workers claim assigned issues and report changes and verification evidence. The orchestrator reviews their work before closure. Unrelated bugs and decisions are recorded in Faz rather than silently implemented. Workers may read `faz-specs/` but cannot edit it; only the orchestrator updates an active plan's implementation status and completion evidence, respecting human-validation gates. Ordinary Faz sessions do not automatically invoke orchestration.
+
+## Code cleanup planning
+
+`faz-code-cleanup` runs only when explicitly invoked by the user. It assesses unnecessary code, tests, complexity, comments, and organizational friction, then prepares evidence-backed Faz work for approval. It does not edit project files or start implementation.
+
+For Codex:
+
+```text
+$faz-code-cleanup Inspect the installer for obsolete wrappers and low-value tests.
+```
+
+For Claude:
+
+```text
+/faz-code-cleanup
+```
+
+The skill reads `AGENT_HANDOFF.md` and relevant `faz-specs/` documents when present and uses treelines for supported-language exploration. It checks indirect usage and compatibility before proposing removals; test-only callers do not by themselves prove dead code. Findings include evidence, risks, and verification needs. Identified bugs are filed automatically; cleanup tasks are prepared with real dependencies and non-conflicting edit boundaries. The skill stops for approval, and subsequent implementation uses the normal Faz workflow.
 
 ## Spec-driven development
 

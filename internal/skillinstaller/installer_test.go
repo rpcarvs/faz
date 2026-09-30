@@ -560,8 +560,8 @@ func assertInstalledBundle(t *testing.T, provider Provider, skill bundledSkill, 
 // assertExplicitInvocationMetadata verifies each provider's independent policy.
 func assertExplicitInvocationMetadata(t *testing.T, provider Provider, result InstallResult) {
 	t.Helper()
-	if len(result.SkillPaths) != 3 {
-		t.Fatalf("expected three installed skills, got %d", len(result.SkillPaths))
+	if len(result.SkillPaths) != 4 {
+		t.Fatalf("expected four installed skills, got %d", len(result.SkillPaths))
 	}
 	sddPath := result.SkillPaths[1]
 	if filepath.Base(sddPath) != "faz-spec-driven" {
@@ -576,7 +576,7 @@ func assertExplicitInvocationMetadata(t *testing.T, provider Provider, result In
 			t.Fatalf("installed template %s is empty", name)
 		}
 	}
-	for i, name := range []string{"faz-spec-driven", "faz-orchestration"} {
+	for i, name := range []string{"faz-spec-driven", "faz-orchestration", "faz-code-cleanup"} {
 		path := result.SkillPaths[i+1]
 		if filepath.Base(path) != name {
 			t.Fatalf("unexpected skill directory for %s: %s", name, path)

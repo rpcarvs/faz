@@ -12,13 +12,14 @@ import (
 const taskManagementSkillDirName = "faz-task-management"
 const specDrivenSkillDirName = "faz-spec-driven"
 const orchestrationSkillDirName = "faz-orchestration"
+const codeCleanupSkillDirName = "faz-code-cleanup"
 const skillDirName = taskManagementSkillDirName
 const bundledSkillPath = "bundled/faz-task-management/SKILL.md"
 const sessionStartCommand = "git rev-parse --show-toplevel >/dev/null 2>&1 && faz init && faz onboard"
 
 // bundledFiles contains built-in skill files to install for supported tools.
 //
-//go:embed bundled/faz-task-management/SKILL.md bundled/faz-spec-driven bundled/faz-orchestration
+//go:embed bundled/faz-task-management/SKILL.md bundled/faz-spec-driven bundled/faz-orchestration bundled/faz-code-cleanup
 var bundledFiles embed.FS
 
 // bundledSkill defines a bundled skill and its invocation policy.
@@ -32,6 +33,7 @@ var bundledSkills = []bundledSkill{
 	{directory: taskManagementSkillDirName, root: "bundled/faz-task-management"},
 	{directory: specDrivenSkillDirName, root: "bundled/faz-spec-driven", explicitOnly: true},
 	{directory: orchestrationSkillDirName, root: "bundled/faz-orchestration", explicitOnly: true},
+	{directory: codeCleanupSkillDirName, root: "bundled/faz-code-cleanup", explicitOnly: true},
 }
 
 type Provider string
@@ -103,6 +105,7 @@ func InstallProvider(options InstallOptions) (InstallResult, error) {
 			skillPaths[taskManagementSkillDirName],
 			skillPaths[specDrivenSkillDirName],
 			skillPaths[orchestrationSkillDirName],
+			skillPaths[codeCleanupSkillDirName],
 		},
 		ContextPath:   contextPath,
 		ContextAction: contextAction,

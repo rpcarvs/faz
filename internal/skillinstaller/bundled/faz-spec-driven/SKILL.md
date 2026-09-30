@@ -50,6 +50,8 @@ Use the templates in [assets](assets/) as the starting structure. Adapt their co
 - `ARCHITECTURE.md` is project-wide. Describe current and proposed boundaries, data flow, integrations, constraints, and decisions relevant to the work.
 - Each `PLANnn.md` is a high-level umbrella for approved work. It links requirements to outcomes and validation. It is not a task manifest.
 
+Consider lightweight domain-oriented organization when distinct business capabilities provide useful boundaries. Group related behavior and make dependencies clear, while respecting language and framework conventions. Prefer simpler organization when sufficient; do not introduce DDD layers or patterns solely for architectural conformity.
+
 Each plan must contain Code boundaries and Acceptance and verification sections. Its Work outcomes section has both:
 
 1. A compact summary table with `Outcome`, `Depends on`, and `Requirements` columns.
