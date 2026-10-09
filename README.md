@@ -210,7 +210,8 @@ faz create "Linked work" --type task --plan PLAN01 --work W01 --description "Opt
 faz list --all --plan PLAN01 --work W01
 faz dep add faz-ab12.0 faz-ab12
 faz list --status open
-faz monitor -t 5
+faz monitor
+faz monitor --claimed
 faz monitor --all
 faz children faz-ab12
 faz ready
@@ -224,6 +225,8 @@ faz -v
 
 ## Notes
 
+- `monitor --claimed` shows only claimed (`in_progress`) issues, without parent epics. Closed tasks disappear on refresh.
+- Press `q` to quit an interactive monitor immediately, or use Ctrl+C.
 - `ready` lists unblocked open non-epic issues that are not actively claimed.
 - `in_progress` is lease-based and can only be set via `faz claim`.
 - `faz claim` is for executable work items. Epics are not claimable.

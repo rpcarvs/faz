@@ -2,11 +2,17 @@ package cmd
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
+	"github.com/charmbracelet/x/term"
 	"github.com/fsnotify/fsnotify"
 	"github.com/rpcarvs/faz/internal/db"
 	"github.com/rpcarvs/faz/internal/model"
@@ -26,15 +32,14 @@ const (
 // monitorService defines the issue reads required by the monitor command.
 type monitorService interface {
 	List(model.ListFilter) ([]model.Issue, error)
-	Get(string) (model.Issue, error)
 }
 
 var monitorCmd = &cobra.Command{
 	Use:   "monitor",
 	Short: "Continuously refresh task list output",
-	Long:  "Monitor watches the task database and refreshes the list whenever it changes.",
+	Long:  "Monitor watches the task database and refreshes the list whenever it changes. Press q or Ctrl+C to quit.",
 	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) (runErr error) {
 		if monitorAll && monitorClaimed {
 			return fmt.Errorf("--all and --claimed cannot be used together")
 		}
@@ -70,11 +75,28 @@ var monitorCmd = &cobra.Command{
 		refreshTicker := time.NewTicker(monitorRefreshInterval)
 		defer refreshTicker.Stop()
 
+		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		keyboard, err := newMonitorKeyboard(cmd.InOrStdin())
+		if err != nil {
+			return err
+		}
+		writer := cmd.OutOrStdout()
+		var quit <-chan error
+		if keyboard != nil {
+			defer func() { runErr = errors.Join(runErr, keyboard.Close()) }()
+			quit = keyboard.quit
+			if file, ok := writer.(*os.File); ok && term.IsTerminal(file.Fd()) {
+				writer = monitorTerminalWriter{writer}
+			}
+		}
+
 		return runMonitor(
+			ctx,
 			svc,
 			filter,
-			monitorClaimed,
-			cmd.OutOrStdout(),
+			writer,
+			quit,
 			watcher.Events,
 			watcher.Errors,
 			refreshTicker.C,
@@ -92,10 +114,11 @@ func init() {
 
 // runMonitor renders issue state and refreshes it after settled filesystem events or fallback ticks.
 func runMonitor(
+	ctx context.Context,
 	svc monitorService,
 	filter model.ListFilter,
-	includeClaimedParents bool,
 	writer io.Writer,
+	quit <-chan error,
 	events <-chan fsnotify.Event,
 	watcherErrors <-chan error,
 	refreshTicks <-chan time.Time,
@@ -104,7 +127,7 @@ func runMonitor(
 	var lastFrame string
 	var rendered bool
 	render := func() error {
-		frame, err := buildMonitorFrame(svc, filter, includeClaimedParents)
+		frame, err := buildMonitorFrame(svc, filter)
 		if err != nil {
 			return err
 		}
@@ -141,6 +164,14 @@ func runMonitor(
 
 	for {
 		select {
+		case <-ctx.Done():
+			return nil
+		case err, ok := <-quit:
+			if !ok {
+				quit = nil
+				continue
+			}
+			return err
 		case _, ok := <-events:
 			if !ok {
 				return nil
@@ -175,56 +206,12 @@ func runMonitor(
 }
 
 // buildMonitorFrame returns the current filtered issue list as terminal output.
-func buildMonitorFrame(svc monitorService, filter model.ListFilter, includeClaimedParents bool) (string, error) {
+func buildMonitorFrame(svc monitorService, filter model.ListFilter) (string, error) {
 	issues, err := svc.List(filter)
 	if err != nil {
 		return "", err
 	}
-	if includeClaimedParents {
-		issues, err = claimedIssuesWithParents(svc, issues)
-		if err != nil {
-			return "", err
-		}
-	}
 	var frame bytes.Buffer
 	printIssueList(&frame, issues)
 	return frame.String(), nil
-}
-
-// claimedIssuesWithParents prepends parent epics for claimed tasks to keep context visible.
-func claimedIssuesWithParents(svc interface {
-	Get(string) (model.Issue, error)
-}, issues []model.Issue) ([]model.Issue, error) {
-	if len(issues) == 0 {
-		return issues, nil
-	}
-
-	parentOrder := make([]string, 0)
-	parentSeen := make(map[string]struct{})
-	for _, issue := range issues {
-		if issue.ParentID == nil {
-			continue
-		}
-		parentID := *issue.ParentID
-		if _, ok := parentSeen[parentID]; ok {
-			continue
-		}
-		parentSeen[parentID] = struct{}{}
-		parentOrder = append(parentOrder, parentID)
-	}
-
-	if len(parentOrder) == 0 {
-		return issues, nil
-	}
-
-	parents := make([]model.Issue, 0, len(parentOrder))
-	for _, parentID := range parentOrder {
-		parent, err := svc.Get(parentID)
-		if err != nil {
-			return nil, err
-		}
-		parents = append(parents, parent)
-	}
-
-	return append(parents, issues...), nil
 }

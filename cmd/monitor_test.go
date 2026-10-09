@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"strings"
 	"sync"
@@ -17,7 +18,6 @@ const monitorTestTimeout = time.Second
 type monitorStubService struct {
 	mu        sync.Mutex
 	responses [][]model.Issue
-	parents   map[string]model.Issue
 	filters   []model.ListFilter
 	listCalls chan struct{}
 }
@@ -33,17 +33,6 @@ func (s *monitorStubService) List(filter model.ListFilter) ([]model.Issue, error
 
 	s.listCalls <- struct{}{}
 	return issues, nil
-}
-
-// Get returns a configured parent issue by public ID.
-func (s *monitorStubService) Get(publicID string) (model.Issue, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	issue, ok := s.parents[publicID]
-	if !ok {
-		return model.Issue{}, errors.New("issue not found")
-	}
-	return issue, nil
 }
 
 // listCallCount returns the number of monitor list reads observed by the stub.
@@ -71,7 +60,6 @@ func TestRunMonitorCoalescesFilesystemEventBursts(t *testing.T) {
 	done := runMonitorForTest(
 		svc,
 		model.ListFilter{},
-		false,
 		&output,
 		events,
 		errorsChannel,
@@ -109,7 +97,6 @@ func TestRunMonitorFallbackRecoversFromStaleEventRefresh(t *testing.T) {
 	done := runMonitorForTest(
 		svc,
 		model.ListFilter{},
-		false,
 		&output,
 		events,
 		errorsChannel,
@@ -141,7 +128,6 @@ func TestRunMonitorFallbackDoesNotCancelPendingDebounce(t *testing.T) {
 	done := runMonitorForTest(
 		svc,
 		model.ListFilter{},
-		false,
 		&output,
 		events,
 		make(chan error),
@@ -191,7 +177,6 @@ func TestRunMonitorFallbackRefreshesEveryIssueType(t *testing.T) {
 	done := runMonitorForTest(
 		svc,
 		model.ListFilter{All: true},
-		false,
 		&output,
 		events,
 		make(chan error),
@@ -222,7 +207,6 @@ func TestRunMonitorDoesNotRedrawUnchangedFallbackFrame(t *testing.T) {
 	done := runMonitorForTest(
 		svc,
 		model.ListFilter{},
-		false,
 		&output,
 		events,
 		make(chan error),
@@ -241,9 +225,8 @@ func TestRunMonitorDoesNotRedrawUnchangedFallbackFrame(t *testing.T) {
 	}
 }
 
-func TestRunMonitorClaimedViewKeepsClosedParentContext(t *testing.T) {
+func TestRunMonitorClaimedViewShowsOnlyClaimedRows(t *testing.T) {
 	parentID := "proj-epic"
-	parent := model.Issue{ID: parentID, Title: "Epic", Type: "epic", Priority: 1, Status: "closed"}
 	child := model.Issue{
 		ID:       parentID + ".0",
 		Title:    "Claimed bug",
@@ -252,30 +235,42 @@ func TestRunMonitorClaimedViewKeepsClosedParentContext(t *testing.T) {
 		Status:   "in_progress",
 		ParentID: &parentID,
 	}
-	svc := newMonitorStubService([][]model.Issue{{child}})
-	svc.parents[parentID] = parent
+	standalone := model.Issue{ID: "proj-task", Title: "Claimed task", Type: "task", Status: "in_progress"}
+	svc := newMonitorStubService([][]model.Issue{{child, standalone}, {}})
 	events := make(chan fsnotify.Event)
-	close(events)
+	refreshTicks := make(chan time.Time)
 	var output bytes.Buffer
 	done := runMonitorForTest(
 		svc,
 		model.ListFilter{Status: "in_progress"},
-		true,
 		&output,
 		events,
 		make(chan error),
-		make(chan time.Time),
+		refreshTicks,
 		time.Millisecond,
 	)
 
+	waitForMonitorListCall(t, svc)
+	refreshTicks <- time.Now()
+	waitForMonitorListCall(t, svc)
+	close(events)
 	waitForMonitorResult(t, done, nil)
-	frame := finalMonitorFrame(output.String())
-	if !strings.Contains(frame, parent.ID) || !strings.Contains(frame, child.ID) {
-		t.Fatalf("claimed monitor frame did not retain closed parent context: %q", frame)
+
+	frames := strings.Split(output.String(), "\033[H\033[2J")
+	if len(frames) != 3 {
+		t.Fatalf("monitor frames = %d, want initial and post-closure frames", len(frames)-1)
 	}
-	filters := svc.requestedFilters()
-	if len(filters) != 1 || filters[0].Status != "in_progress" {
-		t.Fatalf("claimed monitor filters = %#v, want in_progress status", filters)
+	rows := strings.Split(strings.TrimSpace(frames[1]), "\n")
+	if len(rows) != 2 || !strings.Contains(rows[0], child.ID) || !strings.Contains(rows[1], standalone.ID) {
+		t.Fatalf("claimed frame should contain only the two claimed rows: %q", frames[1])
+	}
+	if frame := finalMonitorFrame(output.String()); frame != "No issues found\n" {
+		t.Fatalf("post-closure claimed frame = %q, want no issues", frame)
+	}
+	for _, filter := range svc.requestedFilters() {
+		if filter.Status != "in_progress" || filter.All {
+			t.Fatalf("claimed monitor filter = %#v, want only in_progress status", filter)
+		}
 	}
 }
 
@@ -287,7 +282,6 @@ func TestRunMonitorReturnsWatcherError(t *testing.T) {
 	done := runMonitorForTest(
 		svc,
 		model.ListFilter{},
-		false,
 		&bytes.Buffer{},
 		events,
 		errorsChannel,
@@ -304,7 +298,6 @@ func TestRunMonitorReturnsWatcherError(t *testing.T) {
 func newMonitorStubService(responses [][]model.Issue) *monitorStubService {
 	return &monitorStubService{
 		responses: responses,
-		parents:   make(map[string]model.Issue),
 		listCalls: make(chan struct{}, 16),
 	}
 }
@@ -313,7 +306,6 @@ func newMonitorStubService(responses [][]model.Issue) *monitorStubService {
 func runMonitorForTest(
 	svc monitorService,
 	filter model.ListFilter,
-	includeClaimedParents bool,
 	output *bytes.Buffer,
 	events <-chan fsnotify.Event,
 	watcherErrors <-chan error,
@@ -323,10 +315,11 @@ func runMonitorForTest(
 	done := make(chan error, 1)
 	go func() {
 		done <- runMonitor(
+			context.Background(),
 			svc,
 			filter,
-			includeClaimedParents,
 			output,
+			nil,
 			events,
 			watcherErrors,
 			refreshTicks,
