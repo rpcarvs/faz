@@ -18,10 +18,11 @@ func newProviderCommand(name string, projectRoot ProjectRootFunc) *cobra.Command
 		Short: fmt.Sprintf("Install faz integration for %s", providerLabel(name)),
 		Long: fmt.Sprintf(`Install the faz integration for %[1]s.
 
-This installs the faz-task-management, faz-spec-driven, faz-orchestration, and
-faz-code-cleanup skills, the managed task context block, and a SessionStart hook
-that runs faz init and faz onboard. SDD, orchestration, and code cleanup remain
-explicitly invoked and are not run by the hook.
+This installs the faz-task-management, faz-spec-driven, faz-orchestration,
+faz-code-cleanup, faz-handoff, and faz-resume skills, the managed task context
+block, and a SessionStart hook that runs faz init and faz onboard. SDD,
+orchestration, code cleanup, handoff, and resume remain explicitly invoked
+and are not run by the hook.
 
 Use --local to install into the current Git repository instead of the global
 %[1]s configuration.`, providerLabel(name)),

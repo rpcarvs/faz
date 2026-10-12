@@ -48,11 +48,11 @@ faz install claude
 
 Behavior:
 
-- Installs the `faz-task-management`, `faz-spec-driven`, `faz-orchestration`, and `faz-code-cleanup` skills.
+- Installs the `faz-task-management`, `faz-spec-driven`, `faz-orchestration`, `faz-code-cleanup`, `faz-handoff`, and `faz-resume` skills.
 - Adds or updates the managed FAZ task-management context block.
 - Installs a SessionStart hook that runs `faz init && faz onboard` inside Git repositories.
 - Identical Faz hooks are left unchanged. Differing Faz hooks are preserved unless `--force` is supplied; installation reports created, unchanged, skipped, or updated. Unrelated hooks and settings are preserved.
-- Keeps spec-driven development, orchestration, and code cleanup explicitly invoked. The SessionStart hook runs only normal Faz initialization and onboarding.
+- Keeps spec-driven development, orchestration, code cleanup, handoff, and resume explicitly invoked. The SessionStart hook runs only normal Faz initialization and onboarding.
 - Prints all installed or updated paths.
 
 Use `--local` to install into the current Git repository instead of the global agent config:
@@ -68,6 +68,27 @@ Local behavior:
 - Writes the managed context block to repo-root `AGENTS.md`.
 - For Claude, writes repo-root `CLAUDE.md` as a pointer to `AGENTS.md`.
 - Installs skills and hooks under repo-root `.codex/` or `.claude/`.
+
+## Context handoff and resume
+
+`faz-handoff` and `faz-resume` run only when manually invoked. Both accept optional free-form trailing instructions.
+
+For Claude:
+
+```text
+/faz-handoff
+/faz-handoff Emphasize the OAuth decisions and omit unrelated UI discussion.
+/faz-resume
+/faz-resume Afterwards implement the approved OAuth tasks.
+```
+
+For Codex, use `$faz-handoff` and `$faz-resume` with the same optional instructions.
+
+`faz-handoff` creates or replaces `handoff.md` at the Git repository root, or in the current directory outside Git. It preserves the standard six-section summary, including a final Fresh Recap with the pause point and next action. Trailing instructions adjust emphasis or omissions. Inside Git, it keeps the file untracked through the local `info/exclude` entry `/handoff.md`; an already tracked file is reported without removing it from the index.
+
+`faz-resume` reads the complete handoff and checks current Git and relevant Faz status. With no trailing instructions, it briefly reports the recovered objective, current state, differences, and next action. With instructions, it loads context before following the request under normal project and Faz rules. If the handoff is missing or unreadable, it reports that and stops. Unavailable Git or Faz status checks are reported without initializing tracking.
+
+Handoff writing and resume context loading need no separate Faz issue, claim, or approval. Subsequent implementation follows the normal approval and claim rules. Existing personal `agent-handoff` skill copies are preserved by installation.
 
 ## Task orchestration
 
@@ -101,7 +122,7 @@ For Claude:
 /faz-code-cleanup
 ```
 
-The skill reads `AGENT_HANDOFF.md` and relevant `faz-specs/` documents when present and uses treelines for supported-language exploration. It checks indirect usage and compatibility before proposing removals; test-only callers do not by themselves prove dead code. Findings include evidence, risks, and verification needs. Identified bugs are filed automatically; cleanup tasks are prepared with real dependencies and non-conflicting edit boundaries. The skill stops for approval, and subsequent implementation uses the normal Faz workflow.
+The skill reads `handoff.md` and relevant `faz-specs/` documents when present and uses treelines for supported-language exploration. It checks indirect usage and compatibility before proposing removals; test-only callers do not by themselves prove dead code. Findings include evidence, risks, and verification needs. Identified bugs are filed automatically; cleanup tasks are prepared with real dependencies and non-conflicting edit boundaries. The skill stops for approval, and subsequent implementation uses the normal Faz workflow.
 
 ## Spec-driven development
 

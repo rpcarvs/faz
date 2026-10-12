@@ -11,7 +11,7 @@ Propose behavior-preserving cleanup, not new features or an architectural rewrit
 
 ## Establish context
 
-1. Read project instructions, `AGENT_HANDOFF.md`, and relevant `faz-specs/` documents when present. Verify their statements against current implementation; missing handoff or specs files do not block inspection.
+1. Read project instructions, `handoff.md`, and relevant `faz-specs/` documents when present. Verify their statements against current implementation; missing handoff or specs files do not block inspection.
 2. Use the treelines exploration workflow before reading Go, Python, or Rust source: index and wait for completion, inspect the overview, then narrow with symbol and relationship queries before selective source reads. For other languages, use available language-appropriate inspection tools. Report exploration limitations rather than claiming unsupported certainty.
 3. Inspect existing Faz issues and claims to avoid duplicate proposals. Read-only investigation needs no task or claim. If Faz or a repository is unavailable, report findings and the inability to prepare issues; do not initialize a repository solely for tracking.
 

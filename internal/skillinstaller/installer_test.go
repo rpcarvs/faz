@@ -225,6 +225,14 @@ func TestInstallProviderRerunPreservesCustomFilesAndForceReplacesBundles(t *test
 				if err != nil {
 					t.Fatalf("first install: %v", err)
 				}
+				legacyPath := filepath.Join(filepath.Dir(result.SkillPath), "agent-handoff", "SKILL.md")
+				if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
+					t.Fatalf("create existing handoff skill: %v", err)
+				}
+				legacyContent := "Existing personal handoff instructions\n"
+				if err := os.WriteFile(legacyPath, []byte(legacyContent), 0o644); err != nil {
+					t.Fatalf("write existing handoff skill: %v", err)
+				}
 				for _, path := range result.SkillPaths {
 					if err := os.WriteFile(filepath.Join(path, "custom.txt"), []byte("custom"), 0o644); err != nil {
 						t.Fatalf("write custom skill file: %v", err)
@@ -249,6 +257,7 @@ func TestInstallProviderRerunPreservesCustomFilesAndForceReplacesBundles(t *test
 				}
 				assertInstalledBundles(t, provider, result)
 				assertExplicitInvocationMetadata(t, provider, result)
+				assertFileContains(t, legacyPath, legacyContent)
 
 				options.Force = true
 				result, err = InstallProvider(options)
@@ -262,6 +271,7 @@ func TestInstallProviderRerunPreservesCustomFilesAndForceReplacesBundles(t *test
 				}
 				assertInstalledBundles(t, provider, result)
 				assertExplicitInvocationMetadata(t, provider, result)
+				assertFileContains(t, legacyPath, legacyContent)
 			})
 		}
 	}
@@ -560,8 +570,8 @@ func assertInstalledBundle(t *testing.T, provider Provider, skill bundledSkill, 
 // assertExplicitInvocationMetadata verifies each provider's independent policy.
 func assertExplicitInvocationMetadata(t *testing.T, provider Provider, result InstallResult) {
 	t.Helper()
-	if len(result.SkillPaths) != 4 {
-		t.Fatalf("expected four installed skills, got %d", len(result.SkillPaths))
+	if len(result.SkillPaths) != 6 {
+		t.Fatalf("expected six installed skills, got %d", len(result.SkillPaths))
 	}
 	sddPath := result.SkillPaths[1]
 	if filepath.Base(sddPath) != "faz-spec-driven" {
@@ -576,7 +586,7 @@ func assertExplicitInvocationMetadata(t *testing.T, provider Provider, result In
 			t.Fatalf("installed template %s is empty", name)
 		}
 	}
-	for i, name := range []string{"faz-spec-driven", "faz-orchestration", "faz-code-cleanup"} {
+	for i, name := range []string{"faz-spec-driven", "faz-orchestration", "faz-code-cleanup", "faz-handoff", "faz-resume"} {
 		path := result.SkillPaths[i+1]
 		if filepath.Base(path) != name {
 			t.Fatalf("unexpected skill directory for %s: %s", name, path)
