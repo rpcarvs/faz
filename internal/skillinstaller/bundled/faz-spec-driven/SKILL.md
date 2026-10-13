@@ -46,6 +46,10 @@ If there is no meaningful discrepancy, report that result without unnecessary do
 
 Use the templates in [assets](assets/) as the starting structure. Adapt their content to the project; do not copy placeholders into final documents.
 
+All documents under `faz-specs/` must remain understandable without the local Faz database. Do not include Faz issue IDs anywhere, including decision notes, revision history, review history, or completion records. These documents are committed; `.faz/` is not. Preserve decisions, rationale, dates, approvals, and verification evidence directly in the documents. References such as `PLAN04`, `R01`, `W01`, and `AC01` remain valid. Keep Faz issue provenance and task mappings in Faz.
+
+Retain the templates' Document maintenance section in every generated document so agents editing it outside the SDD workflow receive the same rule.
+
 - `SPECS.md` is project-wide. Assign stable requirement references such as `R01` and state acceptance criteria and validation evidence.
 - `ARCHITECTURE.md` is project-wide. Describe current and proposed boundaries, data flow, integrations, constraints, and decisions relevant to the work.
 - Each `PLANnn.md` is a high-level umbrella for approved work. It links requirements to outcomes and validation. It is not a task manifest.

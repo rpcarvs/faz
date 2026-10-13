@@ -11,6 +11,8 @@ Use Faz for implementation: creating, modifying, or deleting project deliverable
 
 Read-only questions, research, file inspection, codebase exploration, reviews, and diagnosis require no investigation task, claim, or Faz approval. Preparatory reading needs no separate task. Incidental caches, indexes, and temporary diagnostic output do not turn read-only assistance into implementation. Identified bugs must still be filed as described below.
 
+When creating or updating files under `faz-specs/`, exclude Faz issue IDs from every section, including decision and revision notes. Committed documents must be understandable without the uncommitted `.faz/` database. Preserve substantive information and document references; keep issue provenance in Faz. This applies during ordinary implementation as well as SDD.
+
 When preparing implementation, inspect first, then create or reuse tasks for the planned changes. Obtain approval before implementation.
 
 - Run `faz claim <id>` successfully before changing project deliverables.

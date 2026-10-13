@@ -3,6 +3,15 @@
 Status: Draft
 Last reviewed: YYYY-MM-DD
 
+## Document maintenance
+
+Keep this section in the generated document. Do not include Faz issue IDs
+anywhere, including decisions, revisions, reviews, or completion records.
+This document is committed; the local `.faz/` database is not available to
+other developers. Record decisions, rationale, dates, approvals, and
+verification evidence directly. Document references such as PLAN04, R01,
+W01, and AC01 are valid. Keep issue provenance and task mappings in Faz.
+
 ## System overview
 
 Describe the project's principal components and responsibilities at a level appropriate to the project.

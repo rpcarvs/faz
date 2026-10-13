@@ -31,6 +31,7 @@ These rules govern implementation and its execution plan. Read-only questions, r
 - Plan for parallel work with non-conflicting file ownership. Record every real prerequisite, but never add blockers merely to impose an order.
 - Type reminder: Classify each issue type: task, bug, feature, chore, decision.
 - Automatically create or reuse a bug issue when a bug is identified, including during read-only reviews. Record other discovered work during tracked implementation. Filing does not authorize fixing.
+- When creating or updating files under ` + "`faz-specs/`" + `, exclude Faz issue IDs from every section, including decision and revision notes. Committed documents must be understandable without the uncommitted ` + "`.faz/`" + ` database. Preserve substantive information and document references; keep issue provenance in Faz. This applies during ordinary implementation as well as SDD.
 - **Never take decisions autonomously!** If you need a decision, immediately create a ` + "`decision`" + ` issue with FAZ and continue your work if you can, communicating the need to the user at the end. If the decision is needed immediately, stop and communicate to the user.`
 
 const claudeLocalPointerBody = "See [AGENTS.md](./AGENTS.md)"

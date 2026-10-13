@@ -172,6 +172,8 @@ $faz-spec-driven
 
 Reconciliation reports behavior outside the approved scope as a discrepancy and proposes changes for approval. It does not silently redefine specifications. Completion summaries record dated acceptance evidence, not task counts or closed-task status. `.faz/` remains local and ignored; SDD documents in `faz-specs/` are intended to be tracked.
 
+Documents in `faz-specs/` are committed and must not contain Faz issue IDs, including in decisions, revisions, or completion records. The `.faz/` database is local and uncommitted, so those references cannot be resolved by other developers. Keep decisions and evidence in the documents and issue provenance in Faz. Document references such as `PLAN04`, `R01`, and `W01` remain valid.
+
 ### Optional plan and work associations
 
 Issues can optionally link to a plan and outcome. This does not change ordinary Faz workflows, and `plan_id` and `work_id` are not unique identifiers. Multiple issues of any type may share either or both values; Faz issue IDs remain the item identities.
