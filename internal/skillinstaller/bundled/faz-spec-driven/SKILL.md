@@ -54,6 +54,8 @@ Retain the templates' Document maintenance section in every generated document s
 - `ARCHITECTURE.md` is project-wide. Describe current and proposed boundaries, data flow, integrations, constraints, and decisions relevant to the work.
 - Each `PLANnn.md` is a high-level umbrella for approved work. It links requirements to outcomes and validation. It is not a task manifest.
 
+When a repository gains components or services, review the shared documents' titles, scope summaries, constraints, and approval labels. Distinguish system-wide rules from component-specific rules, and identify shared contracts explicitly. Existing component choices must not implicitly constrain new components. Where approved content and proposed additions coexist, state that mixed status near the beginning and identify each section's approval scope. Preserve approved substance, stable references, and approval history while presenting necessary structural or labeling changes for review.
+
 Consider lightweight domain-oriented organization when distinct business capabilities provide useful boundaries. Group related behavior and make dependencies clear, while respecting language and framework conventions. Prefer simpler organization when sufficient; do not introduce DDD layers or patterns solely for architectural conformity.
 
 Each plan must contain Code boundaries and Acceptance and verification sections. Its Work outcomes section has both:

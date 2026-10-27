@@ -16,6 +16,8 @@ W01, and AC01 are valid. Keep issue provenance and task mappings in Faz.
 
 Describe the project's principal components and responsibilities at a level appropriate to the project.
 
+Identify shared contracts and scope constraints to the system or named components, including stack, deployment, versions, access policy, and supporting frontend documents. Existing component choices do not automatically apply to new components. When approved architecture and proposals coexist, state the mixed status near the beginning and identify each section's approval scope.
+
 ## Current architecture
 
 Record relevant existing boundaries, data flow, persistence, integrations, and constraints. Mark observations as observed rather than approved intent when needed.

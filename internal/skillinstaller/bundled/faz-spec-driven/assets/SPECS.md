@@ -16,6 +16,8 @@ W01, and AC01 are valid. Keep issue provenance and task mappings in Faz.
 
 Describe the project-wide product scope and the scope of the current request. Separate observed behavior from proposed behavior where relevant.
 
+For multiple components, distinguish shared requirements from component-specific requirements and constraints. When approved content and proposed additions coexist, state the mixed status near the beginning and identify each section's approval scope. Preserve existing requirement references and approval history.
+
 ## Requirements
 
 ### R01 Short requirement title
