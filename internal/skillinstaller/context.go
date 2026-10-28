@@ -58,32 +58,6 @@ func ClaudeContextPath() (string, error) {
 	return filepath.Join(home, ".claude", "CLAUDE.md"), nil
 }
 
-// InstallCodexContext installs or updates the managed context block in Codex AGENTS.md.
-func InstallCodexContext() (string, string, error) {
-	path, err := CodexContextPath()
-	if err != nil {
-		return "", "", err
-	}
-	action, err := InstallContextAtPath(path)
-	if err != nil {
-		return "", "", err
-	}
-	return path, action, nil
-}
-
-// InstallClaudeContext installs or updates the managed context block in Claude CLAUDE.md.
-func InstallClaudeContext() (string, string, error) {
-	path, err := ClaudeContextPath()
-	if err != nil {
-		return "", "", err
-	}
-	action, err := InstallContextAtPath(path)
-	if err != nil {
-		return "", "", err
-	}
-	return path, action, nil
-}
-
 // InstallContextAtPath creates or updates the managed block at the target path.
 func InstallContextAtPath(path string) (string, error) {
 	existing, err := os.ReadFile(path)

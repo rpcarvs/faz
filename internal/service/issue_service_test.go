@@ -15,6 +15,81 @@ func testStringPtr(value string) *string {
 	return &value
 }
 
+// TestCreateSkipsOccupiedChildIDs verifies hierarchy and status edits do not release public IDs.
+func TestCreateSkipsOccupiedChildIDs(t *testing.T) {
+	for _, scenario := range []string{"detached", "reparented", "closed", "closed and detached"} {
+		t.Run(scenario, func(t *testing.T) {
+			dbPath, err := db.EnsureProjectFiles(t.TempDir())
+			if err != nil {
+				t.Fatalf("ensure project files: %v", err)
+			}
+			sqlDB, err := db.Open(dbPath)
+			if err != nil {
+				t.Fatalf("open database: %v", err)
+			}
+			defer func() { _ = sqlDB.Close() }()
+			if err := db.Migrate(sqlDB); err != nil {
+				t.Fatalf("migrate database: %v", err)
+			}
+			svc := NewIssueService(repo.NewIssueRepo(sqlDB), "faz")
+			parentID, err := svc.Create(model.Issue{Title: "Parent", Type: "epic"})
+			if err != nil {
+				t.Fatalf("create parent: %v", err)
+			}
+			for index := 0; index < 10; index++ {
+				id, err := svc.Create(model.Issue{Title: "Child", Type: "task", ParentID: &parentID})
+				if err != nil || id != fmt.Sprintf("%s.%d", parentID, index) {
+					t.Fatalf("create child %d: id=%q, err=%v", index, id, err)
+				}
+			}
+
+			occupiedID := parentID + ".9"
+			var expectedParent *string
+			expectedStatus := "open"
+			switch scenario {
+			case "reparented":
+				otherID, err := svc.Create(model.Issue{Title: "Other parent", Type: "epic"})
+				if err != nil {
+					t.Fatalf("create other parent: %v", err)
+				}
+				expectedParent = &otherID
+			case "closed":
+				expectedParent = &parentID
+				expectedStatus = "closed"
+			case "closed and detached":
+				expectedStatus = "closed"
+			}
+			if err := svc.Update(occupiedID, map[string]any{"parent_public_id": expectedParent}); err != nil {
+				t.Fatalf("update parent: %v", err)
+			}
+			if expectedStatus == "closed" {
+				if err := svc.Close(occupiedID); err != nil {
+					t.Fatalf("close child: %v", err)
+				}
+			}
+
+			id, err := svc.Create(model.Issue{Title: "Next child", Type: "task", ParentID: &parentID})
+			if err != nil || id != parentID+".10" {
+				t.Fatalf("create next child: id=%q, err=%v; want %s.10", id, err, parentID)
+			}
+			occupied, err := svc.Get(occupiedID)
+			if err != nil {
+				t.Fatalf("get existing child: %v", err)
+			}
+			if occupied.Status != expectedStatus {
+				t.Fatalf("existing status=%q, want %q", occupied.Status, expectedStatus)
+			}
+			if expectedParent == nil {
+				if occupied.ParentID != nil {
+					t.Fatalf("existing child was reattached: %s", *occupied.ParentID)
+				}
+			} else if occupied.ParentID == nil || *occupied.ParentID != *expectedParent {
+				t.Fatalf("existing child has wrong parent: %v, want %s", occupied.ParentID, *expectedParent)
+			}
+		})
+	}
+}
+
 // TestCreateInheritsAndPreservesSDDAssociations verifies creation-time inheritance without later propagation.
 func TestCreateInheritsAndPreservesSDDAssociations(t *testing.T) {
 	projectDir := t.TempDir()

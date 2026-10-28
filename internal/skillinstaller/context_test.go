@@ -7,24 +7,16 @@ import (
 	"testing"
 )
 
-func TestInstallCodexContextAppendsManagedBlock(t *testing.T) {
-	tmp := t.TempDir()
-	codexHome := filepath.Join(tmp, "codex-home")
-	t.Setenv("CODEX_HOME", codexHome)
-	t.Setenv("HOME", tmp)
-
-	path, action, err := InstallCodexContext()
+// TestInstallContextAtPathAppendsManagedBlock checks initial managed context installation.
+func TestInstallContextAtPathAppendsManagedBlock(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "AGENTS.md")
+	action, err := InstallContextAtPath(path)
 	if err != nil {
 		t.Fatalf("install codex context: %v", err)
 	}
 	if action != "appended" {
 		t.Fatalf("expected appended action, got %q", action)
 	}
-	expectedPath := filepath.Join(codexHome, "AGENTS.md")
-	if path != expectedPath {
-		t.Fatalf("expected path %q, got %q", expectedPath, path)
-	}
-
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read file: %v", err)
@@ -82,7 +74,8 @@ func TestInstallContextAtPathUpdatesWhenBlockExists(t *testing.T) {
 	}
 }
 
-func TestInstallClaudeContextPreservesExistingContent(t *testing.T) {
+// TestInstallProviderClaudeGlobalPreservesExistingContext checks user notes survive installation.
+func TestInstallProviderClaudeGlobalPreservesExistingContext(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 
@@ -94,15 +87,15 @@ func TestInstallClaudeContextPreservesExistingContent(t *testing.T) {
 		t.Fatalf("seed file: %v", err)
 	}
 
-	installedPath, action, err := InstallClaudeContext()
+	result, err := InstallProvider(InstallOptions{Provider: ProviderClaude})
 	if err != nil {
 		t.Fatalf("install claude context: %v", err)
 	}
-	if action != "appended" {
-		t.Fatalf("expected appended action, got %q", action)
+	if result.ContextAction != "appended" {
+		t.Fatalf("expected appended action, got %q", result.ContextAction)
 	}
-	if installedPath != path {
-		t.Fatalf("expected path %q, got %q", path, installedPath)
+	if result.ContextPath != path {
+		t.Fatalf("expected path %q, got %q", path, result.ContextPath)
 	}
 
 	data, err := os.ReadFile(path)

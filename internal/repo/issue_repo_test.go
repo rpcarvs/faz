@@ -385,6 +385,43 @@ func TestClaimIssueRejectsEpic(t *testing.T) {
 	}
 }
 
+// TestNextChildIndexUsesLiteralNamespace checks ID ownership independently of hierarchy.
+func TestNextChildIndexUsesLiteralNamespace(t *testing.T) {
+	dbPath, err := db.EnsureProjectFiles(t.TempDir())
+	if err != nil {
+		t.Fatalf("ensure project files: %v", err)
+	}
+	sqlDB, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	defer func() { _ = sqlDB.Close() }()
+	if err := db.Migrate(sqlDB); err != nil {
+		t.Fatalf("migrate database: %v", err)
+	}
+
+	repo := NewIssueRepo(sqlDB)
+	parentID := "faz_project-p111"
+	for _, issue := range []model.Issue{
+		{ID: parentID, Title: "Parent", Type: "epic", Status: "open"},
+		{ID: parentID + ".0", Title: "Unattached occupied ID", Type: "task", Status: "open"},
+		{ID: "fazXproject-p111.1", Title: "Different namespace", Type: "task", Status: "open"},
+		{ID: parentID + ".01", Title: "Noncanonical suffix", Type: "task", Status: "open"},
+		{ID: "faz-other.1", Title: "Reparented here", Type: "task", Status: "open", ParentID: &parentID},
+	} {
+		if _, err := repo.CreateIssue(issue); err != nil {
+			t.Fatalf("create %s: %v", issue.ID, err)
+		}
+	}
+	next, err := repo.NextChildIndex(parentID)
+	if err != nil || next != 1 {
+		t.Fatalf("next child index=%d, err=%v; want 1", next, err)
+	}
+	if _, err := repo.NextChildIndex("faz-miss"); err == nil {
+		t.Fatal("expected missing parent error")
+	}
+}
+
 func TestNextChildIndexReusesDeletedGap(t *testing.T) {
 	projectDir := t.TempDir()
 	dbPath, err := db.EnsureProjectFiles(projectDir)

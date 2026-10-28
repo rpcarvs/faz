@@ -15,8 +15,6 @@ const orchestrationSkillDirName = "faz-orchestration"
 const codeCleanupSkillDirName = "faz-code-cleanup"
 const handoffSkillDirName = "faz-handoff"
 const resumeSkillDirName = "faz-resume"
-const skillDirName = taskManagementSkillDirName
-const bundledSkillPath = "bundled/faz-task-management/SKILL.md"
 const sessionStartCommand = "git rev-parse --show-toplevel >/dev/null 2>&1 && faz init && faz onboard"
 
 // bundledFiles contains built-in skill files to install for supported tools.
@@ -57,8 +55,6 @@ type InstallOptions struct {
 
 // InstallResult reports all paths touched by a provider install.
 type InstallResult struct {
-	// SkillPath is retained for compatibility and identifies the task-management skill.
-	SkillPath           string
 	SkillPaths          []string
 	ContextPath         string
 	ContextAction       string
@@ -104,7 +100,6 @@ func InstallProvider(options InstallOptions) (InstallResult, error) {
 	}
 
 	result := InstallResult{
-		SkillPath: skillPaths[taskManagementSkillDirName],
 		SkillPaths: []string{
 			skillPaths[taskManagementSkillDirName],
 			skillPaths[specDrivenSkillDirName],
@@ -130,24 +125,6 @@ func InstallProvider(options InstallOptions) (InstallResult, error) {
 	}
 
 	return result, nil
-}
-
-// InstallCodexSkill installs the bundled faz skill into Codex skills directory.
-func InstallCodexSkill(force bool) (string, error) {
-	root, err := codexSkillsRoot()
-	if err != nil {
-		return "", err
-	}
-	return installBundledSkill(root, bundledSkills[0], ProviderCodex, force)
-}
-
-// InstallClaudeSkill installs the bundled faz skill into Claude skills directory.
-func InstallClaudeSkill(force bool) (string, error) {
-	root, err := claudeSkillsRoot()
-	if err != nil {
-		return "", err
-	}
-	return installBundledSkill(root, bundledSkills[0], ProviderClaude, force)
 }
 
 // codexSkillsRoot resolves the target Codex skills root directory.

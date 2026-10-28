@@ -110,21 +110,23 @@ func (r *IssueRepo) PublicIDExists(publicID string) (bool, error) {
 	return count > 0, nil
 }
 
-// NextChildIndex returns the next child suffix index for a parent issue.
+// NextChildIndex returns the lowest child suffix whose public ID is unoccupied.
 func (r *IssueRepo) NextChildIndex(parentPublicID string) (int, error) {
-	parent, err := r.GetIssue(parentPublicID)
-	if err != nil {
+	if _, err := r.GetIssue(parentPublicID); err != nil {
 		return 0, err
 	}
 
-	rows, err := r.db.Query(`SELECT public_id FROM issues WHERE parent_id = ?`, parent.InternalID)
+	// Public IDs remain occupied after detachment or reparenting. The range
+	// matches the literal prefix using the unique index; '/' sorts just after '.'.
+	prefix := parentPublicID + "."
+	rows, err := r.db.Query(`SELECT public_id FROM issues WHERE public_id >= ? AND public_id < ?`,
+		prefix, parentPublicID+"/")
 	if err != nil {
 		return 0, fmt.Errorf("query child IDs: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
 	used := make(map[int]struct{})
-	prefix := parentPublicID + "."
 	for rows.Next() {
 		var childID string
 		if err := rows.Scan(&childID); err != nil {
@@ -135,7 +137,7 @@ func (r *IssueRepo) NextChildIndex(parentPublicID string) (int, error) {
 		if err != nil {
 			continue
 		}
-		if suffix >= 0 {
+		if suffix >= 0 && strconv.Itoa(suffix) == raw {
 			used[suffix] = struct{}{}
 		}
 	}

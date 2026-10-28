@@ -49,12 +49,18 @@ func readOptionalInstallFile(path string) ([]byte, error) {
 	if err := validateDirectoryPath(filepath.Dir(path)); err != nil {
 		return nil, err
 	}
-	info, err := os.Stat(path)
+	info, err := os.Lstat(path)
 	if os.IsNotExist(err) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("inspect install file %s: %w", path, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		info, err = os.Stat(path)
+		if err != nil {
+			return nil, fmt.Errorf("resolve install file symlink %s: %w", path, err)
+		}
 	}
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("install file %s must be a regular file", path)
@@ -66,11 +72,17 @@ func readOptionalInstallFile(path string) ([]byte, error) {
 	return data, nil
 }
 
-// validateDirectoryPath allows missing directories but rejects non-directory ancestors.
+// validateDirectoryPath allows missing directories but rejects invalid or unresolved ancestors.
 func validateDirectoryPath(path string) error {
 	for {
-		info, err := os.Stat(path)
+		info, err := os.Lstat(path)
 		if err == nil {
+			if info.Mode()&os.ModeSymlink != 0 {
+				info, err = os.Stat(path)
+				if err != nil {
+					return fmt.Errorf("resolve install directory symlink %s: %w", path, err)
+				}
+			}
 			if !info.IsDir() {
 				return fmt.Errorf("install directory %s must be a directory", path)
 			}

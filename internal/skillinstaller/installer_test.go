@@ -10,134 +10,55 @@ import (
 	"testing"
 )
 
-func TestInstallCodexSkillCreatesOnlySkillFile(t *testing.T) {
-	tmp := t.TempDir()
-	codexHome := filepath.Join(tmp, "codex-home")
-	t.Setenv("CODEX_HOME", codexHome)
-	t.Setenv("HOME", tmp)
-
-	installedPath, err := InstallCodexSkill(false)
-	if err != nil {
-		t.Fatalf("install codex skill: %v", err)
-	}
-
-	expectedPath := filepath.Join(codexHome, "skills", skillDirName)
-	if installedPath != expectedPath {
-		t.Fatalf("expected %s, got %s", expectedPath, installedPath)
-	}
-
-	skillPath := filepath.Join(installedPath, "SKILL.md")
-	if _, err := os.Stat(skillPath); err != nil {
-		t.Fatalf("missing SKILL.md: %v", err)
-	}
-	assertInstalledSharedSkill(t, skillPath)
-	if _, err := os.Stat(filepath.Join(installedPath, "agents")); !os.IsNotExist(err) {
-		t.Fatalf("expected no agents directory, got err=%v", err)
-	}
-}
-
-func TestInstallCodexSkillFallsBackToHomeWhenCodexHomeUnset(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("CODEX_HOME", "")
-	t.Setenv("HOME", tmp)
-
-	installedPath, err := InstallCodexSkill(false)
-	if err != nil {
-		t.Fatalf("install codex skill: %v", err)
-	}
-
-	expected := filepath.Join(tmp, ".codex", "skills", skillDirName)
-	if installedPath != expected {
-		t.Fatalf("expected %s, got %s", expected, installedPath)
-	}
-}
-
-func TestInstallCodexSkillExistingWithoutForceIsIdempotent(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("CODEX_HOME", filepath.Join(tmp, "codex-home"))
-	t.Setenv("HOME", tmp)
-
-	firstPath, err := InstallCodexSkill(false)
-	if err != nil {
-		t.Fatalf("first install should succeed: %v", err)
-	}
-
-	secondPath, err := InstallCodexSkill(false)
-	if err != nil {
-		t.Fatalf("second install should succeed: %v", err)
-	}
-	if secondPath != firstPath {
-		t.Fatalf("expected same install path, got %s and %s", firstPath, secondPath)
-	}
-}
-
-func TestInstallCodexSkillForceOverwrites(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("CODEX_HOME", filepath.Join(tmp, "codex-home"))
-	t.Setenv("HOME", tmp)
-
-	installedPath, err := InstallCodexSkill(false)
-	if err != nil {
-		t.Fatalf("first install should succeed: %v", err)
-	}
-
-	customFile := filepath.Join(installedPath, "custom.txt")
-	if err := os.WriteFile(customFile, []byte("custom"), 0o644); err != nil {
-		t.Fatalf("write custom file: %v", err)
-	}
-
-	if _, err := InstallCodexSkill(true); err != nil {
-		t.Fatalf("force install should succeed: %v", err)
-	}
-
-	if _, err := os.Stat(customFile); err == nil {
-		t.Fatal("expected custom file removed by force overwrite")
-	}
-}
-
-func TestInstallClaudeSkillCreatesOnlySkillFile(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-
-	installedPath, err := InstallClaudeSkill(false)
-	if err != nil {
-		t.Fatalf("install claude skill: %v", err)
-	}
-
-	expectedPath := filepath.Join(tmp, ".claude", "skills", skillDirName)
-	if installedPath != expectedPath {
-		t.Fatalf("expected %s, got %s", expectedPath, installedPath)
-	}
-
-	skillPath := filepath.Join(installedPath, "SKILL.md")
-	if _, err := os.Stat(skillPath); err != nil {
-		t.Fatalf("missing SKILL.md: %v", err)
-	}
-	assertInstalledSharedSkill(t, skillPath)
-	if _, err := os.Stat(filepath.Join(installedPath, "agents")); !os.IsNotExist(err) {
-		t.Fatalf("expected no agents directory, got err=%v", err)
-	}
-}
-
-func TestInstallProviderCodexGlobalInstallsSkillContextAndHooks(t *testing.T) {
-	tmp := t.TempDir()
-	codexHome := filepath.Join(tmp, "codex-home")
-	t.Setenv("CODEX_HOME", codexHome)
-	t.Setenv("HOME", tmp)
-
-	result, err := InstallProvider(InstallOptions{Provider: ProviderCodex})
-	if err != nil {
-		t.Fatalf("install codex provider: %v", err)
-	}
-
-	assertInstalledBundles(t, ProviderCodex, result)
-	assertFileContains(t, result.ContextPath, contextBlockBegin)
-	assertFileContains(t, result.HookPath, sessionStartCommand)
-	if result.ContextPath != filepath.Join(codexHome, "AGENTS.md") {
-		t.Fatalf("unexpected context path: %s", result.ContextPath)
-	}
-	if result.HookPath != filepath.Join(codexHome, "hooks.json") {
-		t.Fatalf("unexpected hook path: %s", result.HookPath)
+// TestInstallProviderGlobalPaths verifies provider destinations and the Codex home fallback.
+func TestInstallProviderGlobalPaths(t *testing.T) {
+	for _, testCase := range []struct {
+		name            string
+		provider        Provider
+		customCodexHome bool
+	}{
+		{name: "codex custom home", provider: ProviderCodex, customCodexHome: true},
+		{name: "codex default home", provider: ProviderCodex},
+		{name: "claude default home", provider: ProviderClaude, customCodexHome: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			root := t.TempDir()
+			t.Setenv("HOME", root)
+			t.Setenv("CODEX_HOME", "")
+			providerRoot := filepath.Join(root, "."+string(testCase.provider))
+			if testCase.customCodexHome {
+				codexHome := filepath.Join(root, "codex-home")
+				t.Setenv("CODEX_HOME", codexHome)
+				if testCase.provider == ProviderCodex {
+					providerRoot = codexHome
+				}
+			}
+			result, err := InstallProvider(InstallOptions{Provider: testCase.provider})
+			if err != nil {
+				t.Fatalf("install provider: %v", err)
+			}
+			assertInstalledBundles(t, testCase.provider, result)
+			for _, skillPath := range result.SkillPaths {
+				if filepath.Dir(skillPath) != filepath.Join(providerRoot, "skills") {
+					t.Fatalf("unexpected skill path: %s", skillPath)
+				}
+			}
+			contextName, hookName := "AGENTS.md", "hooks.json"
+			if testCase.provider == ProviderClaude {
+				contextName, hookName = "CLAUDE.md", "settings.json"
+			}
+			if result.ContextPath != filepath.Join(providerRoot, contextName) {
+				t.Fatalf("unexpected context path: %s", result.ContextPath)
+			}
+			if result.HookPath != filepath.Join(providerRoot, hookName) {
+				t.Fatalf("unexpected hook path: %s", result.HookPath)
+			}
+			assertFileContains(t, result.ContextPath, contextBlockBegin)
+			assertFileContains(t, result.HookPath, sessionStartCommand)
+			if _, err := os.Stat(filepath.Join(result.SkillPaths[0], "agents")); !os.IsNotExist(err) {
+				t.Fatalf("task skill unexpectedly has provider metadata: %v", err)
+			}
+		})
 	}
 }
 
@@ -193,10 +114,10 @@ func TestInstallProviderInstallsBundlesForEveryProviderScope(t *testing.T) {
 			}
 			assertInstalledBundles(t, testCase.provider, result)
 			assertExplicitInvocationMetadata(t, testCase.provider, result)
-			if filepath.Base(result.SkillPath) != "faz-task-management" {
-				t.Fatalf("unexpected task skill directory: %s", result.SkillPath)
+			if filepath.Base(result.SkillPaths[0]) != "faz-task-management" {
+				t.Fatalf("unexpected task skill directory: %s", result.SkillPaths[0])
 			}
-			taskSkill, err := os.ReadFile(filepath.Join(result.SkillPath, "SKILL.md"))
+			taskSkill, err := os.ReadFile(filepath.Join(result.SkillPaths[0], "SKILL.md"))
 			if err != nil {
 				t.Fatalf("read task skill: %v", err)
 			}
@@ -225,7 +146,7 @@ func TestInstallProviderRerunPreservesCustomFilesAndForceReplacesBundles(t *test
 				if err != nil {
 					t.Fatalf("first install: %v", err)
 				}
-				legacyPath := filepath.Join(filepath.Dir(result.SkillPath), "agent-handoff", "SKILL.md")
+				legacyPath := filepath.Join(filepath.Dir(result.SkillPaths[0]), "agent-handoff", "SKILL.md")
 				if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
 					t.Fatalf("create existing handoff skill: %v", err)
 				}
@@ -490,32 +411,13 @@ func TestInstallHookConfigAtPathReportsInvalidJSON(t *testing.T) {
 	}
 }
 
-func assertInstalledSharedSkill(t *testing.T, skillPath string) {
-	t.Helper()
-
-	installedSkill, err := os.ReadFile(skillPath)
-	if err != nil {
-		t.Fatalf("read installed SKILL.md: %v", err)
-	}
-	expectedSkill, err := bundledFiles.ReadFile(bundledSkillPath)
-	if err != nil {
-		t.Fatalf("read bundled SKILL.md: %v", err)
-	}
-	if string(installedSkill) != string(expectedSkill) {
-		t.Fatal("expected installed skill content to match bundled shared skill content")
-	}
-}
-
 func assertInstalledBundles(t *testing.T, provider Provider, result InstallResult) {
 	t.Helper()
 	if len(result.SkillPaths) != len(bundledSkills) {
 		t.Fatalf("expected %d installed skill paths, got %d", len(bundledSkills), len(result.SkillPaths))
 	}
-	if result.SkillPath != result.SkillPaths[0] {
-		t.Fatalf("compatibility skill path %s does not match task skill %s", result.SkillPath, result.SkillPaths[0])
-	}
 	for i, skill := range bundledSkills {
-		target := filepath.Join(filepath.Dir(result.SkillPath), skill.directory)
+		target := filepath.Join(filepath.Dir(result.SkillPaths[0]), skill.directory)
 		if result.SkillPaths[i] != target {
 			t.Fatalf("unexpected installed path for %s: %s", skill.directory, result.SkillPaths[i])
 		}
