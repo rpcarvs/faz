@@ -299,7 +299,7 @@ func TestApplyWindowSizeIgnoresTransientZeroDimensions(t *testing.T) {
 
 func TestFooterLinesUsesFullHintsBeforeCondensing(t *testing.T) {
 	model := NewModel(stubService{})
-	lines, condensed := model.footerLines(72)
+	lines, condensed := model.footerLines(78)
 	if condensed {
 		t.Fatalf("expected non-condensed footer at medium width, got %#v", lines)
 	}
@@ -307,7 +307,7 @@ func TestFooterLinesUsesFullHintsBeforeCondensing(t *testing.T) {
 		t.Fatalf("expected wrapped two-line footer at medium width, got %d lines (%#v)", len(lines), lines)
 	}
 	joined := strings.Join(lines, " ")
-	if !strings.Contains(joined, "Shift+Tab previous") {
+	if !strings.Contains(joined, "Tab/⇧+Tab cycle epics") {
 		t.Fatalf("expected full hints in medium-width footer, got %q", joined)
 	}
 }
@@ -321,6 +321,69 @@ func TestFooterLinesCondensesAtVeryNarrowWidth(t *testing.T) {
 	joined := strings.Join(lines, " ")
 	if !strings.Contains(joined, "o") {
 		t.Fatalf("expected condensed footer to advertise help key, got %q", joined)
+	}
+}
+
+// TestKanbanHintsMatchControls verifies the requested labels, grouping and responsive bounds.
+func TestKanbanHintsMatchControls(t *testing.T) {
+	model := NewModel(stubService{})
+	model.applyWindowSize(120, 40)
+	lines, condensed := model.footerLines(118)
+	if condensed {
+		t.Fatal("expected complete hints at normal wide terminal size")
+	}
+	footer := strings.Join(lines, " ")
+	help := model.renderHelp()
+	for _, text := range []string{footer, help} {
+		previous := -1
+		for _, hint := range []string{
+			"Tab/⇧+Tab cycle epics", "e filter epic", "d epic details", "c show closed",
+			"f filter kind", "Enter details", "arrows/hjkl move", "r refresh", "o help", "q quit",
+		} {
+			position := strings.Index(text, hint)
+			if position <= previous {
+				t.Fatalf("hint %q missing or out of order in %q", hint, text)
+			}
+			previous = position
+		}
+	}
+	if strings.Contains(footer, "a all") || strings.Contains(footer, "Shift+Tab") {
+		t.Fatalf("obsolete footer hints remain: %s", footer)
+	}
+	if !strings.Contains(model.renderPicker(), "a all") || !strings.Contains(model.renderTypePicker(), "Filter kind") {
+		t.Fatal("picker hints do not match the controls")
+	}
+	model.showClosedEpics = true
+	lines, _ = model.footerLines(118)
+	if !strings.Contains(strings.Join(lines, " "), "c hide closed") {
+		t.Fatal("toggle hint does not describe the next action")
+	}
+	for _, width := range []int{24, 42, 60, 72, 78, 118} {
+		lines, _ = model.footerLines(width)
+		if len(lines) > 2 {
+			t.Fatalf("footer exceeds two lines at width %d", width)
+		}
+		for _, line := range lines {
+			if lipgloss.Width(line) > width {
+				t.Fatalf("footer exceeds width %d: %s", width, line)
+			}
+		}
+		if !strings.Contains(strings.Join(lines, " "), "o") {
+			t.Fatalf("narrow footer lost help control at width %d", width)
+		}
+	}
+}
+
+// TestAllEpicsShortcutRemainsAvailable keeps the unadvertised shortcut on board and picker.
+func TestAllEpicsShortcutRemainsAvailable(t *testing.T) {
+	for _, picker := range []bool{false, true} {
+		model := visibilityModel(epicVisibilityIssues())
+		model.selectScopeByKey("proj-open")
+		model.showPicker = picker
+		model = visibilityKey(model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+		if model.currentScope().Key != scopeAll || model.showPicker {
+			t.Fatalf("all-epics shortcut failed with picker=%t", picker)
+		}
 	}
 }
 

@@ -207,6 +207,14 @@ faz completion zsh
 faz completion fish
 ```
 
+## Kanban
+
+`faz kanban` hides closed epics and their tasks by default. Press `c` to show or hide them for the current session. Tasks without an epic remain available, and completed tasks under unfinished epics stay visible. The header shows the current setting.
+
+Use `Tab` / `⇧+Tab` to cycle available epic scopes, `e` to filter by epic, `d` for epic details, and `f` to filter by kind. The epic list follows the closed-epic setting; `c` also works inside that list. If the selected epic becomes hidden or unavailable, the board returns to the aggregate view. The `a` shortcut still selects the aggregate view and is listed in the epic filter.
+
+Use arrows or `hjkl` to move, `Enter` for task details, `r` to refresh, `o` for keybindings, and `q` to quit or close an open modal.
+
 ## Storage model
 
 `faz init` creates:

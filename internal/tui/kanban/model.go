@@ -81,8 +81,10 @@ type Model struct {
 	height int
 	ready  bool
 
-	catalog Catalog
-	err     error
+	catalog         Catalog
+	allCatalog      Catalog
+	showClosedEpics bool
+	err             error
 
 	scopeIndex  int
 	selectedCol int
@@ -147,10 +149,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.err = nil
-		m.catalog = msg.catalog
-		if m.scopeIndex >= len(m.catalog.Scopes) {
-			m.scopeIndex = 0
-		}
+		m.allCatalog = msg.catalog
+		m.applyEpicVisibility()
 		if m.showDetails {
 			m.syncSelectionToInspectedIssue()
 		} else {
@@ -231,6 +231,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "a":
 			m.selectScopeByKey(scopeAll)
+			return m, nil
+		case "c":
+			m.showClosedEpics = !m.showClosedEpics
+			m.applyEpicVisibility()
 			return m, nil
 		case "e":
 			m.showPicker = true
@@ -313,6 +317,11 @@ func (m Model) View() string {
 }
 
 func (m Model) updatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "c" {
+		m.showClosedEpics = !m.showClosedEpics
+		m.applyEpicVisibility()
+		return m, nil
+	}
 	if len(m.catalog.Scopes) == 0 {
 		switch msg.String() {
 		case "q", "esc":
@@ -357,6 +366,10 @@ func (m Model) updatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "tab":
 		m.pickerIndex = (m.pickerIndex + 1) % len(m.catalog.Scopes)
+		m.ensurePickerVisible()
+		return m, nil
+	case "shift+tab":
+		m.pickerIndex = (m.pickerIndex - 1 + len(m.catalog.Scopes)) % len(m.catalog.Scopes)
 		m.ensurePickerVisible()
 		return m, nil
 	}
@@ -426,6 +439,31 @@ func (m *Model) applyWindowSize(width, height int) {
 // isUndersized reports whether the current window is too small for the full board layout.
 func (m Model) isUndersized() bool {
 	return m.width < minRenderableWidth || m.height < minRenderableHeight
+}
+
+// applyEpicVisibility preserves scope identities while rebuilding the selectable catalog.
+func (m *Model) applyEpicVisibility() {
+	scopeKey := m.currentScope().Key
+	pickerKey := scopeAll
+	if m.pickerIndex >= 0 && m.pickerIndex < len(m.catalog.Scopes) {
+		pickerKey = m.catalog.Scopes[m.pickerIndex].Key
+	}
+	m.catalog = m.allCatalog.withClosedEpics(m.showClosedEpics)
+	m.scopeIndex, m.pickerIndex = 0, 0
+	for index, scope := range m.catalog.Scopes {
+		if scope.Key == scopeKey {
+			m.scopeIndex = index
+		}
+		if scope.Key == pickerKey {
+			m.pickerIndex = index
+		}
+	}
+	if m.currentScope().Key != scopeKey {
+		m.selectedCol, m.selectedRow, m.scrollRow = 0, 0, 0
+	}
+	m.pickerScroll = minInt(m.pickerScroll, maxInt(0, len(m.catalog.Scopes)-m.pickerListHeight()))
+	m.ensurePickerVisible()
+	m.ensureSelection()
 }
 
 func (m *Model) cycleScope(step int) {
@@ -762,7 +800,11 @@ func (m Model) renderHeader() string {
 
 	title := "faz kanban"
 	scopeTitle := "Epic: " + scope.Title
-	subtitle := fmt.Sprintf("Live refresh. Type: %s.", strings.ToUpper(m.typeFilter))
+	closedState := "hidden"
+	if m.showClosedEpics {
+		closedState = "shown"
+	}
+	subtitle := fmt.Sprintf("Closed epics: %s. Kind: %s.", closedState, strings.ToUpper(m.typeFilter))
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		headerStyle.Render(truncateLine(fmt.Sprintf("%s  |  %s", title, scopeTitle), contentWidth)),
@@ -921,7 +963,7 @@ func (m Model) renderPicker() string {
 	}
 	end := minInt(len(m.catalog.Scopes), start+listHeight)
 
-	lines := []string{"Select scope", fmt.Sprintf("%d/%d", minInt(m.pickerIndex+1, len(m.catalog.Scopes)), len(m.catalog.Scopes)), ""}
+	lines := []string{"Filter epic", fmt.Sprintf("%d/%d", minInt(m.pickerIndex+1, len(m.catalog.Scopes)), len(m.catalog.Scopes)), ""}
 	for i := start; i < end; i++ {
 		scope := m.catalog.Scopes[i]
 		prefix := "  "
@@ -930,7 +972,7 @@ func (m Model) renderPicker() string {
 		}
 		lines = append(lines, prefix+scope.Title)
 	}
-	lines = append(lines, "", "Enter select • Esc close • a all")
+	lines = append(lines, "", "Enter select • Esc/q close • a all", "c "+m.closedEpicAction()+" closed epics")
 	box := lipgloss.NewStyle().
 		Width(width).
 		Border(lipgloss.DoubleBorder()).
@@ -944,7 +986,7 @@ func (m Model) renderPicker() string {
 
 // pickerListHeight caps the visible scope rows so the picker fits the terminal.
 func (m Model) pickerListHeight() int {
-	available := m.height - 9
+	available := m.height - 10
 	if available < 1 {
 		return 1
 	}
@@ -982,30 +1024,26 @@ func (m Model) renderHelp() string {
 		"Keybindings",
 		"",
 		"Board:",
-		"  Tab / Shift+Tab  cycle epic scope",
-		"  e                open epic list",
-		"  a                all epics view",
-		"  f                issue type filter",
-		"  d                epic details",
-		"  arrows / h j k l move selection",
-		"  Enter            open task details",
-		"  r                refresh now",
-		"  o                keybinding help",
-		"  q                quit",
+	}
+	for _, hint := range m.boardHints() {
+		lines = append(lines, "  "+hint)
+	}
+	lines = append(lines,
 		"",
 		"Task details modal:",
-		"  up/down          move within current column",
-		"  left/right       move to adjacent column",
+		"  up/down or j/k   scroll",
 		"  Enter / Esc / q  close details",
 		"",
-		"Epic picker:",
+		"Epic filter:",
 		"  up/down          move",
+		"  Tab/⇧+Tab        cycle epics",
 		"  Enter            select",
 		"  a                all epics view",
+		"  c                "+m.closedEpicAction()+" closed epics",
 		"  Esc / q          close picker",
 		"",
 		"Enter, Esc, q, or o closes this view.",
-	}
+	)
 	box := lipgloss.NewStyle().
 		Width(width).
 		Border(lipgloss.DoubleBorder()).
@@ -1019,7 +1057,7 @@ func (m Model) renderHelp() string {
 
 func (m Model) renderTypePicker() string {
 	width := minInt(44, maxInt(minModalWidth, m.width-10))
-	lines := []string{"Select issue type", ""}
+	lines := []string{"Filter kind", ""}
 	for i, issueType := range typeFilterOptions {
 		prefix := "  "
 		if i == m.typeIndex {
@@ -1369,41 +1407,54 @@ func boardColumnLayout(totalWidth int) ([3]int, int) {
 	return widths, gap
 }
 
-// footerLines builds a responsive footer and reports whether condensed mode is active.
-func (m Model) footerLines(width int) ([]string, bool) {
-	fullItems := []string{
-		"Tab next epic",
-		"Shift+Tab previous",
-		"e epic list",
-		"a all",
-		"f type filter",
+// closedEpicAction names the next action of the visibility toggle.
+func (m Model) closedEpicAction() string {
+	if m.showClosedEpics {
+		return "hide"
+	}
+	return "show"
+}
+
+// boardHints keeps board and help copy in epic, task and general control order.
+func (m Model) boardHints() []string {
+	return []string{
+		"Tab/⇧+Tab cycle epics",
+		"e filter epic",
 		"d epic details",
-		"arrows move",
+		"c " + m.closedEpicAction() + " closed",
+		"f filter kind",
 		"Enter details",
+		"arrows/hjkl move",
 		"r refresh",
+		"o help",
 		"q quit",
 	}
-	full, ok := wrapFooterItems(fullItems, width, 2)
+}
+
+// footerLines builds a responsive footer and reports whether condensed mode is active.
+func (m Model) footerLines(width int) ([]string, bool) {
+	full, ok := wrapFooterItems(m.boardHints(), width, 2)
 	if ok {
 		return full, false
 	}
 	condensedItems := []string{
-		"Tab",
+		"Tab/⇧+Tab",
 		"e",
-		"a",
-		"f",
 		"d",
-		"arrows",
+		"c",
+		"f",
 		"Enter " + string(rune(0x23CE)),
-		"q",
+		"arrows/hjkl",
+		"r",
 		"o all keys",
+		"q",
 	}
 	condensed, ok := wrapFooterItems(condensedItems, width, 2)
 	if ok {
 		return condensed, true
 	}
 	// At extreme widths keep core controls visible in one safe line.
-	return []string{truncateLine("Tab • e • a • q • o", width)}, true
+	return []string{truncateLine("Tab e d c f Enter o q", width)}, true
 }
 
 // filterByType keeps only issues matching one issue type.

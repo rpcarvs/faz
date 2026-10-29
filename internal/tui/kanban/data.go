@@ -113,6 +113,42 @@ func buildCatalog(issues []model.Issue) Catalog {
 	return catalog
 }
 
+// withClosedEpics derives a visible catalog without modifying the complete snapshot.
+func (c Catalog) withClosedEpics(show bool) Catalog {
+	if show {
+		return c
+	}
+	visible := c
+	visible.Scopes = make([]Scope, 0, len(c.Scopes))
+	visible.Columns = make(map[string]scopeColumns, len(c.Columns))
+	for _, scope := range c.Scopes {
+		if c.Epics[scope.Key].Status == "closed" {
+			continue
+		}
+		visible.Scopes = append(visible.Scopes, scope)
+		visible.Columns[scope.Key] = c.Columns[scope.Key]
+	}
+	all := c.Columns[scopeAll]
+	visible.Columns[scopeAll] = scopeColumns{
+		Todo:    c.withoutClosedEpicTasks(all.Todo),
+		Claimed: c.withoutClosedEpicTasks(all.Claimed),
+		Done:    c.withoutClosedEpicTasks(all.Done),
+	}
+	return visible
+}
+
+// withoutClosedEpicTasks retains standalone tasks and tasks whose epic is unfinished.
+func (c Catalog) withoutClosedEpicTasks(issues []model.Issue) []model.Issue {
+	visible := make([]model.Issue, 0, len(issues))
+	for _, issue := range issues {
+		if issue.ParentID != nil && c.Epics[*issue.ParentID].Status == "closed" {
+			continue
+		}
+		visible = append(visible, issue)
+	}
+	return visible
+}
+
 func assignIssue(columns *scopeColumns, status string, issue model.Issue) {
 	switch status {
 	case "closed":
